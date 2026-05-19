@@ -19,6 +19,7 @@ import { isOpenAtLogin, launchedAtLogin, toggleOpenAtLogin } from "./login-item"
 import { log } from "./logger";
 import { focusOrCreateWindow, installApplicationMenu } from "./menu";
 import { closeEmbeddedDatabase, startEmbeddedServer, type ServerHandle } from "./server-host";
+import { ensureUserPath } from "./shell-path";
 import { createTray } from "./tray";
 import { createDashboardWindow } from "./window";
 
@@ -90,6 +91,11 @@ function showFatalDialog(message: string, detail?: string): void {
 }
 
 async function boot(): Promise<void> {
+  // Recover the user's shell PATH before the server boots — a Finder/Dock or
+  // login-launched app only inherits launchd's minimal PATH, which makes the
+  // "Run Claude" feature unable to find the `claude` CLI.
+  ensureUserPath();
+
   try {
     state.serverHandle = await startEmbeddedServer();
   } catch (err) {
