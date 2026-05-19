@@ -655,13 +655,20 @@ unrelated server on `:4820`.
 | `CCAM_DESKTOP_BIND_PORT` | `server-host.ts` | Bind exactly this port — disables adoption and fallback. Used by the smoke test. |
 | `CCAM_DESKTOP_NO_ADOPT` | `server-host.ts` | `=1` → never adopt an existing `:4820` server; always start our own. |
 | `CCAM_DESKTOP_VERBOSE` | `logger.ts` | Mirror `info`/`warn` log lines to stdout (errors always go to stderr). |
+| `DASHBOARD_DATA_DIR` | `server-host.ts` → server | Set automatically to `app.getPath('userData')/data` so the SQLite database and VAPID keys live in the per-user Application Support directory, never inside the (possibly read-only) `.app` bundle. |
 | `CSC_IDENTITY_AUTO_DISCOVERY` | electron-builder | Set to `false` by the `package` script — forces ad-hoc signing. |
 | `CSC_LINK` / `CSC_KEY_PASSWORD` | electron-builder | Explicit Developer ID `.p12` for real signing. |
 | `APPLE_ID` / `APPLE_TEAM_ID` / `APPLE_APP_SPECIFIC_PASSWORD` | `notarize.js` | Enable Apple notarization when all three are set. |
 
 The embedded server also honors the dashboard's own env vars (`DASHBOARD_PORT`
-is set automatically by `server-host.ts`; everything else in
-[`../SETUP.md`](../SETUP.md) applies).
+and `DASHBOARD_DATA_DIR` are set automatically by `server-host.ts`; everything
+else in [`../SETUP.md`](../SETUP.md) applies).
+
+> **Writable state never lives in the `.app` bundle.** A packaged, code-signed,
+> or app-translocated bundle is read-only; a database written there would break
+> History Import and event persistence. `server-host.ts` points
+> `DASHBOARD_DATA_DIR` at `~/Library/Application Support/Claude Code Monitor/data/`,
+> which is also why your imported history survives an app reinstall or update.
 
 ---
 
