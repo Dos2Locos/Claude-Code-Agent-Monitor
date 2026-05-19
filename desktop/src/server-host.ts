@@ -13,6 +13,7 @@
  * runs `npm start` in a terminal — we should not double-bind.
  */
 
+import * as fs from "node:fs";
 import * as http from "node:http";
 import Module from "node:module";
 import * as net from "node:net";
@@ -254,6 +255,22 @@ export async function startEmbeddedServer(): Promise<ServerHandle> {
   // The server reads from process.env. Set everything up before require()ing.
   process.env.NODE_ENV = "production";
   process.env.DASHBOARD_PORT = String(port);
+
+  // Keep all writable server state OUT of the .app bundle. When the app is
+  // installed under /Applications, code-signed, or run via macOS app
+  // translocation, `Resources/app/` is read-only — a SQLite database (or VAPID
+  // keys) written there fails, which breaks History Import and event
+  // persistence. Point the server's data directory at the per-user location.
+  if (!process.env.DASHBOARD_DATA_DIR) {
+    const dataDir = path.join(app.getPath("userData"), "data");
+    try {
+      fs.mkdirSync(dataDir, { recursive: true });
+      process.env.DASHBOARD_DATA_DIR = dataDir;
+      log.info("server data directory", { dataDir });
+    } catch (err) {
+      log.warn("could not create per-user data dir; server will use its default", err);
+    }
+  }
 
   // Make sure server's `require("better-sqlite3")` finds the ABI-correct copy.
   ensureNativeModulesPatched();

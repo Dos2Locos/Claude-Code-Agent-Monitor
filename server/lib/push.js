@@ -7,7 +7,12 @@ const webpush = require("web-push");
 const path = require("path");
 const fs = require("fs");
 
-const KEYS_PATH = path.join(__dirname, "../../data/vapid-keys.json");
+// Honors DASHBOARD_DATA_DIR so hosts like the desktop app can keep writable
+// state out of a read-only application bundle; defaults to the repo `data/`.
+const KEYS_PATH = path.join(
+  process.env.DASHBOARD_DATA_DIR || path.join(__dirname, "..", "..", "data"),
+  "vapid-keys.json"
+);
 
 function loadOrCreateVapidKeys() {
   if (fs.existsSync(KEYS_PATH)) {
