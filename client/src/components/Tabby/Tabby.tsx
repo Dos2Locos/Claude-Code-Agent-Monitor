@@ -81,8 +81,11 @@ function TabbyFlyout({ anchor, children }: { anchor: Anchor; children: ReactNode
     let left = anchor.side === "left" ? anchor.left : anchor.left + anchor.size - w;
     left = Math.min(vw - w - VIEWPORT_MARGIN, Math.max(VIEWPORT_MARGIN, left));
 
-    // Vertical: open up when docked low, down when docked high; clamp on-screen.
-    let top = anchor.openUp ? anchor.top - h - FLYOUT_GAP : anchor.top + anchor.size + FLYOUT_GAP;
+    // Vertical: prefer above the cat (feels natural). Only drop below when
+    // there isn't room above — i.e. the cat is near the top edge.
+    const above = anchor.top - h - FLYOUT_GAP;
+    const below = anchor.top + anchor.size + FLYOUT_GAP;
+    let top = above >= VIEWPORT_MARGIN ? above : below;
     top = Math.min(vh - h - VIEWPORT_MARGIN, Math.max(VIEWPORT_MARGIN, top));
 
     setStyle({ left, top, visibility: "visible" });

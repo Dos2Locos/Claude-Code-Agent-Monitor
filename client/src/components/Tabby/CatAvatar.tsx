@@ -26,8 +26,11 @@ export function CatAvatar({ mood, reducedMotion, size = 60 }: CatAvatarProps) {
   const rafRef = useRef<number>();
   const [pupil, setPupil] = useState({ x: 0, y: 0 });
 
-  // Pupils follow the cursor when motion is allowed and the cat is awake.
-  const tracking = !reducedMotion && mood !== "sleeping" && mood !== "disconnected";
+  // Pupils follow the cursor whenever motion is allowed and the eyes are open.
+  // (Only `sleeping` closes them by intent; `disconnected` hides the open-eye
+  // group via CSS, so tracking there is harmless and keeps eyes pre-aimed for
+  // the instant the connection returns.)
+  const tracking = !reducedMotion && mood !== "sleeping";
 
   useEffect(() => {
     if (!tracking) {

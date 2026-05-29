@@ -26,7 +26,14 @@ export type Mood =
  * The hook turns pulses into transient speech bubbles. `null` means the message
  * was irrelevant or non-notable.
  */
-export type TabbyPulse = "session_done" | "session_start" | "error" | "run_done" | null;
+export type TabbyPulse =
+  | "session_done"
+  | "session_start"
+  | "subagent_spawn"
+  | "waiting"
+  | "error"
+  | "run_done"
+  | null;
 
 export interface TabbyStatus {
   liveCount: number;
@@ -36,8 +43,9 @@ export interface TabbyStatus {
 
 export interface TabbyState {
   connected: boolean;
-  /** Latest status per session id we still care about ("active" | "error"). */
-  sessions: Record<string, "active" | "error">;
+  /** Latest status per session id we still care about. "waiting" = active but
+   *  blocked on user input; counts as live for the status line. */
+  sessions: Record<string, "active" | "error" | "waiting">;
   /** Epoch ms of the last meaningful activity; drives stuck/sleeping. */
   lastActivityAt: number;
   /** While `now < happyUntil`, mood can be `happy`. */
@@ -82,7 +90,7 @@ export function statusOf(state: TabbyState): TabbyStatus {
   let liveCount = 0;
   let errorCount = 0;
   for (const s of Object.values(state.sessions)) {
-    if (s === "active") liveCount++;
+    if (s === "active" || s === "waiting") liveCount++;
     else if (s === "error") errorCount++;
   }
   return { liveCount, errorCount, connected: state.connected };
@@ -129,9 +137,17 @@ export function reduceTabby(
       let worriedUntil = state.worriedUntil;
 
       if (s.status === "active") {
-        const isNew = sessions[s.id] !== "active";
-        sessions[s.id] = "active";
-        if (isNew) pulse = "session_start";
+        // "waiting" = active session blocked on user input (permission prompt
+        // or sitting at a fresh prompt). Announce the transition once each way.
+        const isWaiting = !!s.awaiting_input_since;
+        const prev = sessions[s.id];
+        if (isWaiting) {
+          sessions[s.id] = "waiting";
+          if (prev !== "waiting") pulse = "waiting";
+        } else {
+          sessions[s.id] = "active";
+          if (prev === undefined) pulse = "session_start";
+        }
       } else if (s.status === "error") {
         sessions[s.id] = "error";
         worriedUntil = now + WORRIED_MS;
@@ -151,7 +167,20 @@ export function reduceTabby(
       };
     }
 
-    case "agent_created":
+    case "agent_created": {
+      const a = msg.data as Agent;
+      if (a && a.status === "error") {
+        return {
+          state: { ...state, worriedUntil: now + WORRIED_MS, lastActivityAt: now },
+          pulse: "error",
+        };
+      }
+      // A freshly spawned subagent is worth announcing; the main agent landing
+      // is already covered by session_start.
+      const pulse: TabbyPulse = a && a.type === "subagent" ? "subagent_spawn" : null;
+      return { state: { ...state, lastActivityAt: now }, pulse };
+    }
+
     case "agent_updated": {
       const a = msg.data as Agent;
       if (a && a.status === "error") {

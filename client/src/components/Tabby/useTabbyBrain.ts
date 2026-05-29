@@ -40,9 +40,12 @@ export interface TabbyBrain {
 
 export function useTabbyBrain(): TabbyBrain {
   const now0 = Date.now();
+  // Start optimistically connected (idle, open eyes) so the cursor-tracking
+  // eyes are live from the first frame instead of after the WebSocket finishes
+  // its initial handshake. onConnection below corrects this if it's truly down.
   const [state, setState] = useState<TabbyState>(() => ({
     ...initialTabbyState(now0),
-    connected: eventBus.connected,
+    connected: true,
   }));
   const [tick, setTick] = useState(now0);
   const [bubble, setBubble] = useState<string | null>(null);

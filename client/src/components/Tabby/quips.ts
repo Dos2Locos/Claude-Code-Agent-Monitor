@@ -13,7 +13,19 @@ export type QuipKey = NonNullable<TabbyPulse> | Mood;
 const QUIPS: Record<QuipKey, string[]> = {
   // Pulses (event-driven, transient bubbles)
   session_done: ["session wrapped 🐾", "nice, that one's done", "clean run — purr"],
-  session_start: ["ooh, a new session", "something's cooking", "eyes on it 👀"],
+  session_start: ["ooh, a new session", "something's cooking", "eyes on it 👀", "a new one just landed"],
+  subagent_spawn: [
+    "a subagent just spawned 🐾",
+    "reinforcements! new subagent",
+    "delegating — subagent's on it",
+    "ooh, a little helper appeared",
+  ],
+  waiting: [
+    "this one's waiting on you 👀",
+    "needs your input over here",
+    "paused — your move",
+    "tap tap… it's waiting for you",
+  ],
   error: ["ow, an error", "a hook tripped — peek?", "hiss… something broke"],
   run_done: ["run finished 🐾", "all done over here", "that's a wrap"],
   // Moods (steady-state flavor, used by the panel / idle bubbles)

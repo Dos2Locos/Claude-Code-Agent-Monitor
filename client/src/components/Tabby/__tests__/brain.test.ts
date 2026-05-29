@@ -27,6 +27,16 @@ function sessionMsg(id: string, status: Session["status"], ts = T0): WSMessage {
 function agentMsg(status: Agent["status"]): WSMessage {
   return { type: "agent_updated", data: { status } as Agent, timestamp: String(T0) };
 }
+function agentCreatedMsg(type: Agent["type"], status: Agent["status"] = "working"): WSMessage {
+  return { type: "agent_created", data: { type, status } as Agent, timestamp: String(T0) };
+}
+function waitingMsg(id: string): WSMessage {
+  return {
+    type: "session_updated",
+    data: { id, status: "active", awaiting_input_since: "2026-05-29T00:00:00Z" } as Session,
+    timestamp: String(T0),
+  };
+}
 function eventMsg(event_type: string): WSMessage {
   return { type: "new_event", data: { event_type } as DashboardEvent, timestamp: String(T0) };
 }
@@ -122,6 +132,24 @@ describe("reduceTabby counts and pulses", () => {
     const r = reduceTabby(initialTabbyState(T0), agentMsg("error"), T0);
     expect(r.pulse).toBe("error");
     expect(deriveMood(r.state, T0)).toBe("worried");
+  });
+
+  it("a newly created subagent emits subagent_spawn, a main agent does not", () => {
+    expect(reduceTabby(initialTabbyState(T0), agentCreatedMsg("subagent"), T0).pulse).toBe(
+      "subagent_spawn"
+    );
+    expect(reduceTabby(initialTabbyState(T0), agentCreatedMsg("main"), T0).pulse).toBe(null);
+  });
+
+  it("waiting transition emits a waiting pulse once and still counts as live", () => {
+    let s = initialTabbyState(T0);
+    ({ state: s } = reduceTabby(s, sessionMsg("a", "active"), T0)); // active
+    const first = reduceTabby(s, waitingMsg("a"), T0);
+    expect(first.pulse).toBe("waiting");
+    expect(statusOf(first.state).liveCount).toBe(1);
+    // A repeat waiting update does not re-announce.
+    const second = reduceTabby(first.state, waitingMsg("a"), T0);
+    expect(second.pulse).toBe(null);
   });
 
   it("failure event types set worried, normal events do not", () => {
