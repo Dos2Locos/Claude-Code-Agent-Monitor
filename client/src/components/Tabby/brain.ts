@@ -241,7 +241,7 @@ export function reduceTabby(
 
 /** Drop all errored sessions from tracking (used by "clear alerts"). */
 export function clearErrors(state: TabbyState): TabbyState {
-  const sessions: Record<string, "active" | "error"> = {};
+  const sessions: TabbyState["sessions"] = {};
   for (const [id, s] of Object.entries(state.sessions)) {
     if (s !== "error") sessions[id] = s;
   }
