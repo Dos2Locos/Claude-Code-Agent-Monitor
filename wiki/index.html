@@ -1952,7 +1952,7 @@ npm run mcp:start:repl         # interactive CLI with tab completion</code></pre
                 <tr>
                   <td><code>desktop:install</code></td>
                   <td><code>npm run desktop:install</code></td>
-                  <td>Install Electron + electron-builder under <code>desktop/</code>; rebuilds <code>better-sqlite3</code> for Electron's ABI</td>
+                  <td>Install Electron + electron-builder under <code>desktop/</code>; rebuilds <code>better-sqlite3</code> for Electron's ABI. Preflights the native <code>better-sqlite3</code> build; prints actionable setup help (incl. a no-toolchain alternative) on failure</td>
                 </tr>
                 <tr>
                   <td><code>desktop:build</code></td>
@@ -4370,6 +4370,8 @@ npm run build
 
 # 3. Install Electron + electron-builder under desktop/
 #    (also fetches better-sqlite3 as a prebuilt Electron binary)
+#    Preflights the native better-sqlite3 build; on failure it prints
+#    copy-pasteable setup help (incl. a no-toolchain alternative) and exits non-zero
 npm run desktop:install
 
 # 4a. ON macOS — build a DMG, pick ONE:
@@ -5375,7 +5377,9 @@ npm run install-hooks</code></pre>
                     This is non-fatal — <code>better-sqlite3</code> is an optional dependency. On
                     Node 22+ the server automatically falls back to built-in
                     <code>node:sqlite</code>. On older Node versions, install Python 3 + C++ build
-                    tools, then run <code>npm rebuild better-sqlite3</code>.
+                    tools, then run <code>npm rebuild better-sqlite3</code>. For the desktop app, the
+                    <code>desktop:install</code> preflight prints copy-pasteable per-OS setup guidance
+                    (incl. a no-toolchain alternative) when the native build fails.
                   </td>
                 </tr>
                 <tr>

@@ -368,7 +368,7 @@ The fastest path is to **download a pre-built installer** from the [latest GitHu
 To build it yourself instead:
 
 ```bash
-npm run desktop:install        # install Electron + electron-builder into desktop/
+npm run desktop:install        # install Electron + electron-builder into desktop/ (preflights native deps; prints setup help on failure)
 npm run desktop:dmg:arm64      # macOS: fast single-arch DMG (Apple Silicon)
 npm run desktop:win            # Windows: NSIS installer .exe (run on Windows)
 ```
@@ -595,7 +595,7 @@ For git clones, the server periodically `git fetch`es `origin` and compares your
 | `npm run mcp:typecheck` | Type-check MCP source without emitting build output        |
 | `npm run mcp:docker:build` | Build MCP container image with Docker (`agent-dashboard-mcp:local`) |
 | `npm run mcp:podman:build` | Build MCP container image with Podman (`localhost/agent-dashboard-mcp:local`) |
-| `npm run desktop:install` | Install Electron + electron-builder into the `desktop/` workspace (rebuilds `better-sqlite3` for Electron's ABI) |
+| `npm run desktop:install` | Install Electron + electron-builder into the `desktop/` workspace (rebuilds `better-sqlite3` for Electron's ABI); preflights the native `better-sqlite3` build and prints actionable setup help (incl. a no-toolchain alternative) on failure |
 | `npm run desktop:dev`   | Build and launch the Electron desktop app for local iteration  |
 | `npm run desktop:build` | Compile the desktop TypeScript sources into `desktop/out/`      |
 | `npm run desktop:test`  | Run the desktop smoke test (spawn Electron, probe `/api/health`) |
@@ -1374,6 +1374,7 @@ On launch the app:
 ### Features
 
 - **Tray icon** — always-on status surface (macOS menu bar / Windows notification area). Left-click toggles the dashboard window; right-click opens a context menu with **Open Dashboard**, **Open in Browser**, **Restart Server**, **Show Logs**, **Open at Login** (toggle), and **Quit**. macOS uses a tinted template glyph; Windows uses the colored `icon.ico` (a black template would vanish on the dark taskbar).
+- **Window & taskbar icon** — the `BrowserWindow` is wired to the colored app logo (`icon.ico` on Windows, `icon.png` elsewhere), so the title bar / taskbar show the real Claude Code Monitor icon — even an unpackaged `npm run desktop:dev` run no longer shows the generic Electron icon.
 - **Native application menu** — standard `About` / `File` / `Edit` / `View` / `Window` / `Help` menu with `⌘` / `Ctrl` shortcuts.
 - **Auto-start at login** — toggle **Open at Login** from the tray or app menu. On macOS it registers through the modern `SMAppService` API, so the entry appears under **System Settings → General → Login Items**; on Windows it writes a per-user `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` entry, visible in **Task Manager → Startup**.
 - **Window-close hides, server keeps running** — closing the window just hides it; the server and tray stay up. Click the tray to bring the window back.
@@ -1400,13 +1401,13 @@ Per-commit fresh builds also live as CI artifacts (sign-in required, 14-day rete
 ```bash
 npm run setup                # install root + client deps, build client, install hooks
 npm run build                # build the React client (client/dist)
-npm run desktop:install      # install Electron + electron-builder into desktop/
+npm run desktop:install      # install Electron + electron-builder into desktop/ (preflights native deps; prints setup help on failure)
 npm run desktop:dmg:arm64    # macOS:   fast single-arch DMG → desktop/release/ClaudeCodeMonitor-<ver>-arm64.dmg
 npm run desktop:win          # Windows: NSIS installer → desktop/release/ClaudeCodeMonitor-Setup-<ver>-x64.exe
 ```
 
 > [!NOTE]
-> **DMGs build on macOS; Windows `.exe`s build on Windows** — electron-builder packages for the host OS. The macOS universal `npm run desktop:dmg` build is intentionally **slow** (it builds the app twice and merges with `@electron/universal`); for your own Mac use the single-arch `desktop:dmg:arm64` / `desktop:dmg:x64`. On Windows, `better-sqlite3` is fetched as a prebuilt Electron binary by `npm run desktop:install`, so no Visual Studio C++ toolchain is needed in the common case.
+> **DMGs build on macOS; Windows `.exe`s build on Windows** — electron-builder packages for the host OS. The macOS universal `npm run desktop:dmg` build is intentionally **slow** (it builds the app twice and merges with `@electron/universal`); for your own Mac use the single-arch `desktop:dmg:arm64` / `desktop:dmg:x64`. On Windows, `better-sqlite3` is fetched as a prebuilt Electron binary by `npm run desktop:install`, so no Visual Studio C++ toolchain is needed in the common case. If the build does fail (no prebuilt binary, or a missing C++ toolchain), `desktop:install` prints the exact per-OS fix plus a no-toolchain alternative and fails loudly instead of leaving a broken install.
 
 ### Install it
 
@@ -1436,7 +1437,7 @@ All commands run from the **repo root**:
 
 | Command                     | What it does                                                                 |
 | --------------------------- | ---------------------------------------------------------------------------- |
-| `npm run desktop:install`   | Install Electron + electron-builder into `desktop/`; rebuild `better-sqlite3` for Electron's ABI |
+| `npm run desktop:install`   | Install Electron + electron-builder into `desktop/`; rebuild `better-sqlite3` for Electron's ABI; preflights the native `better-sqlite3` build and prints actionable setup help (incl. a no-toolchain alternative) on failure |
 | `npm run desktop:build`     | Compile the desktop TypeScript sources into `desktop/out/`                    |
 | `npm run desktop:dev`       | Build and launch the Electron app for local iteration                         |
 | `npm run desktop:test`      | Run the smoke test (spawn Electron, probe `/api/health`, shut down)            |
@@ -1455,7 +1456,7 @@ The macOS DMG is **ad-hoc signed** by default so anyone can build a working `.ap
 ### Implementation notes
 
 - **`better-sqlite3`** is the only native module in the dependency tree, and a native module must be compiled against the exact Node ABI it runs on. The `desktop/` workspace ships its **own copy** of `better-sqlite3` rebuilt for Electron's ABI and uses a process-local `require` redirect to point `server/db.js` at it; the repo-root copy stays built for system Node (so `npm run test:server` keeps working).
-- **Building a DMG rebuilds `better-sqlite3` for the target architecture**, which can leave the desktop copy built for the other CPU arch and break `npm run desktop:dev` / `npm run desktop:test` with `ERR_DLOPEN_FAILED`. The desktop `prebuild` step now **auto-heals** the native module for the local machine on the next build, so the dev and smoke-test flows keep working after an arch-specific DMG build.
+- **Building a DMG rebuilds `better-sqlite3` for the target architecture**, which can leave the desktop copy built for the other CPU arch and break `npm run desktop:dev` / `npm run desktop:test` with `ERR_DLOPEN_FAILED`. The desktop `prebuild` step now **auto-heals** the native module for the local machine on the next build, so the dev and smoke-test flows keep working after an arch-specific DMG build. The `prebuild` step also **fails fast with setup help** when the `better-sqlite3` native binary is missing entirely, turning a runtime crash into a copy-pasteable build-time error.
 - The **only change outside `desktop/`** is a behavior-preserving refactor of `server/index.js`: its post-listen bootstrap (update scheduler, `cc-watcher`, orphaned-run reconciliation) was extracted into an exported `startBackgroundServices()` so the embedded server runs exactly what `node server/index.js` runs. The standalone `node server/index.js` path is functionally unchanged; `client/`, `scripts/`, `mcp/`, and `vscode-extension/` are untouched.
 - Two path-filtered desktop CI jobs build, smoke-test, and package the app: **`🍎 macOS Desktop (DMG)`** on `macos-latest` (uploads the `ClaudeCodeMonitor-dmg` artifact — two single-arch DMGs) and **`🪟 Windows Desktop (EXE)`** on `windows-latest` (uploads the `ClaudeCodeMonitor-win` artifact — NSIS installer + portable). On a version-bump push to `master`, the `release` job attaches **both** the macOS DMGs and the Windows `.exe`s to the published `vX.Y.Z` GitHub Release. The Windows icon (`desktop/assets/icon.ico`) is committed to the repo (regenerate it from `icon.png` with `npm run build:win-icon`, PowerShell + .NET, no extra tooling).
 
@@ -1950,7 +1951,9 @@ agent-dashboard/
 |   |   |-- constants.ts         # App name, ports, timeouts, window size
 |   |   +-- preload.ts           # Intentionally empty (zero renderer privilege)
 |   |-- scripts/
-|   |   |-- prebuild.js          # Ensures root + client are built before tsc
+|   |   |-- install.js           # Preflights native deps for desktop:install; prints setup help + exits non-zero on failure
+|   |   |-- preflight.js         # Shared better-sqlite3 binary check + actionable per-OS setup help (incl. no-toolchain alternative)
+|   |   |-- prebuild.js          # Ensures root + client are built before tsc; fails fast with setup help if native binary missing
 |   |   |-- build-icons.sh       # SVG -> PNG/ICNS via qlmanage/sips/iconutil
 |   |   +-- notarize.js          # electron-builder afterSign hook (opt-in notarization)
 |   +-- tests/

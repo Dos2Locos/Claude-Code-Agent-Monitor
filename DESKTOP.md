@@ -85,6 +85,7 @@ open desktop/release/ClaudeCodeMonitor-*-arm64.dmg   # …-x64.dmg / …-univers
 - **Closing the window hides it.** The server keeps running, the tray icon stays, and (on macOS) the **dock icon stays too** — clicking either re-opens the window. Independent signals that the app is still alive.
 - **Quitting** (⌘Q / Ctrl+Q, *Quit* in the application menu, or *Quit* in the tray menu) pops a confirmation dialog — *"Quit Claude Code Monitor? Press ⌘Q again to skip this prompt and quit immediately."* Press **Quit** in the dialog, or **press ⌘Q / Ctrl+Q a second time** to bypass the prompt. Either way the SQLite handle is checkpointed cleanly before the process exits.
 - **Tray** — the macOS menu bar / Windows notification area. macOS uses a black template glyph the OS tints for light/dark menu bars; Windows uses the colored `icon.ico`, because a template glyph would vanish on the dark taskbar. A single click (left or right) opens the dropdown, which shows a **live status snapshot** pulled straight from the embedded SQLite handle each time it opens: server port, active sessions, working agents, and events today. Snapshot rows are clickable — they open the dashboard.
+- **Window / taskbar icon** — the `BrowserWindow` sets its `icon` to the colored app logo (`icon.ico` on Windows, `icon.png` elsewhere — the same logo as the macOS Dock, rendered from `assets/icon.svg`), so an unpackaged `desktop:dev` run shows the real app logo in the title bar / taskbar instead of the generic Electron icon. The macOS dev Dock icon is set too; packaged apps already get theirs from the bundle `.icns`/`.exe`.
 - **Open-at-login toggle:** flip *Open at Login* in the tray menu (or the app menu). Both platforms go through Electron's first-party `app.*LoginItemSettings` API — no third-party deps. On **macOS** it registers via the `SMAppService` API, so the entry appears under  → *System Settings → General → Login Items*. On **Windows** it writes a per-user `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` entry, visible under *Task Manager → Startup*; a login-triggered launch is detected via a `--ccam-hidden` arg (Windows has no `wasOpenedAtLogin`). On Linux the toggle is a no-op (unsupported).
 - **Single-instance:** double-launching just focuses the existing window. No second server, no port collision. (Applies on every platform.)
 - **Logs** live at `~/Library/Logs/Claude Code Monitor/desktop.log` on macOS and `%APPDATA%\Claude Code Monitor\logs\desktop.log` on Windows (use *Show Logs* in the tray menu to open the folder).
@@ -113,7 +114,9 @@ desktop/
 │   ├── logger.ts               # file logger
 │   └── constants.ts            # incl. APP_ID (matches electron-builder appId)
 ├── scripts/
-│   ├── prebuild.js             # ensures root + client are built before tsc; shells npm/npx on Windows (.cmd shims)
+│   ├── install.js              # `desktop:install` wrapper: runs npm install, then prints actionable native-dep help + exits non-zero on failure
+│   ├── preflight.js            # shared native-dep check (hasBetterSqliteBinary) + per-OS prerequisite help (printNativeDepHelp)
+│   ├── prebuild.js             # ensures root + client are built before tsc; shells npm/npx on Windows (.cmd shims); fails fast with setup help when the better-sqlite3 native binary is missing
 │   ├── build-icons.sh          # SVG → PNG/ICNS + tray PNGs via qlmanage/sips/iconutil (macOS)
 │   ├── build-win-icon.ps1      # icon.png → icon.ico for Windows (PowerShell + .NET)
 │   └── notarize.js             # electron-builder afterSign hook (opt-in; macOS only)
@@ -191,7 +194,20 @@ npm run desktop:win:portable # no-install portable .exe
 > from `npm run build:icons`. On Windows, `better-sqlite3` is fetched as a
 > prebuilt Electron binary by `npm run desktop:install` (its postinstall runs
 > `electron-builder install-app-deps`), so no Visual Studio C++ toolchain is
-> needed in the common case.
+> needed in the common case. If that fetch/rebuild *does* fail (no C++ toolchain,
+> or a Node version with no prebuilt binary), `npm run desktop:install` — and any
+> `desktop:*` build, gated by `prebuild.js` — prints the exact per-OS fix plus a
+> no-toolchain alternative and **fails loudly** rather than crashing at runtime:
+>
+> ```bash
+> cd desktop
+> npm install --ignore-scripts
+> node node_modules/electron/install.js
+> npx electron-builder install-app-deps
+> ```
+>
+> A Node LTS (20/22) ships prebuilt `better-sqlite3` binaries and avoids the
+> compile entirely.
 
 > After `npm run clean` in `desktop/`, you must `npm run build` again before
 > packaging — `clean` removes `out/`, and `electron-builder` only packages, it
@@ -204,7 +220,7 @@ The smoke test does not exercise the BrowserWindow (no display on headless CI). 
 ## Known caveats
 
 - **Bundle size** ≈ 80 MB DMG, ≈ 250 MB on disk. The standard Electron tax. The Windows installer is comparable. Tauri would cut this dramatically but at the cost of a sidecar-process model and a Rust toolchain dependency — fair to revisit in a follow-up PR if bundle size becomes a real complaint.
-- **Native modules**: `better-sqlite3` is rebuilt against Electron's Node version automatically via `electron-builder install-app-deps` in the desktop workspace's `postinstall`. On Windows it is fetched as a **prebuilt Electron binary**, so no Visual Studio C++ toolchain is needed in the common case. If that fails for any reason, the server falls back to `node:sqlite` (per #37), so the app still boots.
+- **Native modules**: `better-sqlite3` is rebuilt against Electron's Node version automatically via `electron-builder install-app-deps` in the desktop workspace's `postinstall`. On Windows it is fetched as a **prebuilt Electron binary**, so no Visual Studio C++ toolchain is needed in the common case. If that build *does* fail (or the binary is missing afterward), `npm run desktop:install` — and any `desktop:*` build — prints the exact per-OS fix (Windows: Visual Studio Build Tools with the "Desktop development with C++" workload; macOS: `xcode-select --install`; Linux: build-essential + python3) plus a no-toolchain alternative (`npm install --ignore-scripts` → `node node_modules/electron/install.js` → `npx electron-builder install-app-deps`), and exits non-zero — failing loudly at install/build time rather than crashing at runtime. Even so, if the module is unavailable the server falls back to `node:sqlite` (per #37), so the app still boots.
 - **Universal binary**: `npm run desktop:dmg` produces a DMG containing both x64 and arm64 slices, which is slow to build. `npm run desktop:dmg:arm64` and `npm run desktop:dmg:x64` build a single-architecture DMG instead — much faster, and roughly half the size.
 - **Auto-update**: not wired on either platform. The current update path is *re-download the latest installer* (DMG on macOS, `.exe` on Windows). `electron-updater` + GitHub Releases is the natural follow-up.
 
@@ -222,6 +238,7 @@ The smoke test does not exercise the BrowserWindow (no display on headless CI). 
 | App didn't auto-start at login (macOS) | Login Items entry got revoked by macOS | Toggle *Open at Login* off and on again from the tray menu |
 | App didn't auto-start at login (Windows) | The `HKCU\…\Run` startup entry is missing or was disabled | Toggle *Open at Login* off and on again from the tray menu, then confirm the entry under *Task Manager → Startup* is **Enabled** |
 | `npm run desktop:win` / `:win:portable` fails or produces nothing | electron-builder packages for the host OS — you ran it on macOS/Linux | Build the Windows `.exe` **on Windows** (and DMGs on macOS) |
+| Desktop build/install fails on `better-sqlite3` / native binary missing | No C++ toolchain, or no prebuilt for your Node version | Run `npm run desktop:install` and follow the printed help, or use the no-toolchain alternative (`npm install --ignore-scripts` → `node node_modules/electron/install.js` → `npx electron-builder install-app-deps`); or use Node LTS 20/22 |
 | Port 4820 already in use, app refuses to start | Something other than the dashboard is on 4820 and it doesn't answer `/api/health` | The app will pick a fallback (4821–4829, then a random high port) — check the tray menu's port indicator |
 | Dashboard stays empty — 0 sessions, 0 agents, no real-time updates | The app bound a fallback port (4820 was taken), and the Claude Code hooks were posting events to the wrong port | Fixed — the server publishes its live port to `~/.claude/.agent-dashboard.json` and the hook handler reads it. After upgrading from a pre-fix build, **start a new Claude Code session** so the updated hooks take effect |
 | `desktop:dmg` seems stuck at `packaging arch=universal` | Not stuck — the universal merge is genuinely slow | Wait a few minutes, or build a single architecture with `desktop:dmg:arm64` / `desktop:dmg:x64` |

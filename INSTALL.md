@@ -181,7 +181,7 @@ If you'd rather not keep a terminal window open, the project also ships an Elect
 | Downloading a pre-built installer (macOS) | macOS — nothing else |
 | Downloading a pre-built installer (Windows) | Windows 10/11 (x64) — nothing else |
 | Building the DMG locally (macOS) | macOS, Node.js 18+ (22+ recommended), npm 9+, and **Xcode command-line tools** (`xcode-select --install`) so the native `better-sqlite3` module can be rebuilt for Electron's ABI |
-| Building the `.exe` locally (Windows) | Windows, Node.js 18+ (22+ recommended), npm 9+. `better-sqlite3` is fetched as a **prebuilt Electron binary** by `npm run desktop:install`, so no Visual Studio C++ toolchain is needed in the common case |
+| Building the `.exe` locally (Windows) | Windows, Node.js 18+ (22+ recommended), npm 9+. `better-sqlite3` is fetched as a **prebuilt Electron binary** by `npm run desktop:install`, so no Visual Studio C++ toolchain is needed in the common case. If the build _does_ fail, `npm run desktop:install` prints the exact fix (Visual Studio Build Tools + "Desktop development with C++") plus a no-toolchain alternative and exits non-zero rather than failing silently |
 
 ### Way 1 — Download a pre-built installer
 
@@ -239,7 +239,7 @@ The artifact lands in `desktop/release/`. Pick the build command that matches yo
 | `npm run desktop:dmg:x64` | macOS — Intel only | Fast (~1 min) | Building for your own Intel Mac |
 | `npm run desktop:win` | Windows — NSIS installer `.exe` (x64) | — | Building the per-user installer |
 | `npm run desktop:win:portable` | Windows — portable `.exe` (x64) | — | Building the no-install portable build |
-| `npm run desktop:install` | — | — | Install Electron + electron-builder deps |
+| `npm run desktop:install` | — | — | Install Electron + electron-builder deps; preflights the native `better-sqlite3` build and prints actionable setup help on failure |
 | `npm run desktop:build` | — | — | TypeScript compile only (`out/`) |
 | `npm run desktop:dev` | — | — | Build, then launch Electron locally |
 | `npm run desktop:test` | — | — | Smoke test (spawn Electron, probe `/api/health`) |
@@ -469,6 +469,17 @@ If you see an error box at startup saying *"SQLite backend not available"*, eith
   - **Linux:** `sudo apt install python3 make g++` (Debian/Ubuntu) or equivalent
 
   Then run: `npm rebuild better-sqlite3`
+
+### Desktop build or install fails on the native dependency
+
+Unlike the root server (which falls back to `node:sqlite`), the desktop app **requires** `better-sqlite3` built for Electron's ABI. If that build can't happen, `npm run desktop:install` (and the desktop `prebuild` gate that runs before every `desktop:*` build) now stops with copy-pasteable setup help instead of a raw node-gyp trace or a runtime crash: it lists the per-OS C++ toolchain prerequisites (Windows: Visual Studio Build Tools + "Desktop development with C++"; macOS: `xcode-select --install`; Linux: build-essential + python3), notes that Node LTS 20/22 ship prebuilt binaries, and offers a no-toolchain alternative:
+
+```bash
+cd desktop
+npm install --ignore-scripts
+node node_modules/electron/install.js
+npx electron-builder install-app-deps
+```
 
 ### `npm run dev` fails immediately
 

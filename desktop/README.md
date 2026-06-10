@@ -71,7 +71,22 @@ npm run desktop:win:portable # no-install portable → release/ClaudeCodeMonitor
 > is generated from `assets/icon.png` by `npm run build:win-icon`
 > (PowerShell + .NET, no extra tooling). `better-sqlite3` is fetched as a
 > prebuilt Electron binary by `npm run desktop:install`, so no Visual Studio
-> C++ toolchain is required for the common case.
+> C++ toolchain is required for the common case. If that fetch/rebuild *does*
+> fail (no C++ toolchain, or a Node version with no prebuilt binary),
+> `npm run desktop:install` — and any `desktop:*` build, gated by `prebuild.js` —
+> prints the exact per-OS prerequisite (Windows: Visual Studio Build Tools with
+> the "Desktop development with C++" workload; macOS: `xcode-select --install`;
+> Linux: build-essential + python3) plus a no-toolchain alternative, then exits
+> non-zero rather than crashing at runtime:
+>
+> ```bash
+> cd desktop
+> npm install --ignore-scripts
+> node node_modules/electron/install.js
+> npx electron-builder install-app-deps
+> ```
+>
+> A Node LTS (20/22) ships prebuilt binaries and avoids the compile entirely.
 
 ---
 
@@ -297,6 +312,28 @@ flowchart TD
 - PR #37's `compat-sqlite` (`node:sqlite`) fallback remains as a safety net —
   one reason the desktop app pins **Electron 35** (its bundled Node 22.16 has
   `node:sqlite`; Electron 31's Node 20 did not).
+- **No toolchain needed in the common case** — `npm run desktop:install` runs
+  `scripts/install.js`, which wraps `npm install` (whose `postinstall` runs
+  `electron-builder install-app-deps`). On success it behaves like a bare
+  `npm install`. On failure — or if the native binary is missing afterward — it
+  prints actionable help (`scripts/preflight.js`'s `printNativeDepHelp()`) and
+  exits non-zero, never leaving a half-set-up `node_modules`. The help lists the
+  per-OS C++ prerequisite (Windows: Visual Studio Build Tools with the "Desktop
+  development with C++" workload; macOS: `xcode-select --install`; Linux:
+  build-essential + python3), notes that a Node LTS (20/22) ships prebuilt
+  binaries (avoiding the compile), and gives a no-toolchain alternative:
+
+  ```bash
+  cd desktop
+  npm install --ignore-scripts
+  node node_modules/electron/install.js
+  npx electron-builder install-app-deps
+  ```
+
+  `prebuild.js` runs the same check (`hasBetterSqliteBinary()`) before **every**
+  `desktop:*` build/dev script and fails fast with the same help if the binary
+  is missing — turning what was a runtime fatal-dialog crash into a build-time,
+  copy-pasteable error.
 
 ---
 
@@ -373,7 +410,13 @@ flowchart TD
 - **Window** — `BrowserWindow` with `contextIsolation: true`,
   `nodeIntegration: false`, an empty preload, and `webSecurity: true`. Geometry
   is persisted to `window-state.json` under `app.getPath('userData')`. External
-  links open in the system browser, never inside Electron.
+  links open in the system browser, never inside Electron. Its `icon` is set to
+  the colored app logo via `appIconPath()` (`icon.ico` on Windows, `icon.png`
+  elsewhere — the same logo as the macOS Dock, rendered from `assets/icon.svg`),
+  resolving dev vs packaged asset paths, so an unpackaged `desktop:dev` run shows
+  the real logo in the title bar / taskbar instead of the generic Electron icon.
+  macOS ignores `BrowserWindow#icon` (the dev Dock icon is set separately in
+  `main.ts`; packaged apps get theirs from the bundle `.icns`/`.exe`).
 - **Application menu** — standard macOS menu (`About`, `Open at Login`, `File`,
   `Edit`, `View`, `Window`, `Help`). `⌘R` is owned by `View ▸ reload`.
 
@@ -421,7 +464,11 @@ desktop/
 │   ├── constants.ts     # APP_NAME, ports, timeouts, window size
 │   └── preload.ts       # intentionally empty (zero renderer privilege)
 ├── scripts/
-│   ├── prebuild.js      # ensures client/dist + root node_modules exist
+│   ├── install.js       # desktop:install wrapper: npm install + actionable
+│   │                    #   native-dep help on failure (exits non-zero)
+│   ├── preflight.js     # shared hasBetterSqliteBinary() + printNativeDepHelp()
+│   ├── prebuild.js      # ensures client/dist + root node_modules exist; fails
+│   │                    #   fast with setup help if better-sqlite3 binary missing
 │   ├── notarize.js      # electron-builder afterSign hook (opt-in)
 │   └── build-icons.sh   # regenerate icon.icns + tray PNGs from SVG
 ├── assets/              # icon.icns, icon.png, tray-icon-Template*.png, SVGs
@@ -504,7 +551,7 @@ and fails with *"entry file out/main.js does not exist"*).
 
 | Repo-root command | `desktop/` command | What it does |
 |---|---|---|
-| `npm run desktop:install` | `npm install` | Install Electron, electron-builder, types; rebuild `better-sqlite3` for Electron's ABI (`postinstall`). |
+| `npm run desktop:install` | `node scripts/install.js` | Install Electron, electron-builder, types; rebuild `better-sqlite3` for Electron's ABI (`postinstall`). Preflights native deps — on failure (or a missing binary) prints per-OS setup help + a no-toolchain alternative and exits non-zero. |
 | `npm run desktop:build` | `npm run build` | Prebuild guard + `tsc` → `out/`. |
 | `npm run desktop:dev` | `npm run dev` | Build, then launch Electron against `out/main.js`. |
 | `npm run desktop:test` | `npm test` | Build, then run the smoke test. |

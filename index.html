@@ -3554,6 +3554,8 @@
             <pre class="code-block" id="desktop-block"><span class="comment"># Build the desktop app locally (run on the host OS)</span>
 <span class="prompt">$</span>npm run setup
 <span class="prompt">$</span>npm run build
+<span class="comment"># desktop:install preflights the native better-sqlite3 build and, on</span>
+<span class="comment"># failure, prints copy-pasteable setup help (incl. a no-toolchain alternative)</span>
 <span class="prompt">$</span>npm run desktop:install
 
 <span class="comment"># macOS - fast, one architecture (recommended for your own Mac)</span>

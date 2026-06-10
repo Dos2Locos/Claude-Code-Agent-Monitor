@@ -221,7 +221,7 @@ This section covers the parts of running the desktop app that matter for setup.
 
 | Script | Command | Description |
 |---|---|---|
-| `desktop:install` | `npm run desktop:install` | Install Electron + electron-builder into `desktop/`; fetches `better-sqlite3` as a prebuilt Electron binary for Electron's ABI (no Visual Studio C++ toolchain needed in the common case; on macOS, Xcode CLI tools cover any fallback build) |
+| `desktop:install` | `npm run desktop:install` | Install Electron + electron-builder into `desktop/`; fetches `better-sqlite3` as a prebuilt Electron binary for Electron's ABI (no Visual Studio C++ toolchain needed in the common case; on macOS, Xcode CLI tools cover any fallback build). Preflights the native `better-sqlite3` build; on failure prints actionable per-OS setup help plus a no-toolchain alternative and exits non-zero (also enforced by the desktop `prebuild` gate) |
 | `desktop:build` | `npm run desktop:build` | Prebuild guard + `tsc` → `desktop/out/` |
 | `desktop:dev` | `npm run desktop:dev` | Build, then launch Electron against `out/main.js` |
 | `desktop:test` | `npm run desktop:test` | Build, then run the smoke test (spawn Electron, probe `/api/health`) |
