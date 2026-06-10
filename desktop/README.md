@@ -417,8 +417,15 @@ flowchart TD
   the real logo in the title bar / taskbar instead of the generic Electron icon.
   macOS ignores `BrowserWindow#icon` (the dev Dock icon is set separately in
   `main.ts`; packaged apps get theirs from the bundle `.icns`/`.exe`).
-- **Application menu** — standard macOS menu (`About`, `Open at Login`, `File`,
-  `Edit`, `View`, `Window`, `Help`). `⌘R` is owned by `View ▸ reload`.
+- **Application menu** — standard menu (`About`, `Open at Login`, `File`,
+  `Edit`, `View`, `Window`, `Help`). `⌘R` / `Ctrl+R` is owned by `View ▸ reload`.
+  The `File ▸ Open Dashboard` item (`⌘1`) is gated behind `isMac`: macOS keeps a
+  global menu bar after the window hides so it can reopen it, but on
+  Windows/Linux the menu is attached to the window and a menu accelerator can't
+  fire while it's hidden — reopening there is the tray's *Open Dashboard*, and
+  `focusOrCreateWindow` calls `show()` unconditionally so it reliably raises a
+  backgrounded/minimized window (a bare `focus()` on Windows often only flashes
+  the taskbar button).
 
 ---
 
