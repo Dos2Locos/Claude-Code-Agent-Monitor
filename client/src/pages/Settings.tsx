@@ -46,6 +46,8 @@ import {
   Settings as SettingsIcon,
   FolderOpen,
   Info,
+  Cat,
+  History,
 } from "lucide-react";
 import { api } from "../lib/api";
 import { eventBus } from "../lib/eventBus";
@@ -57,6 +59,25 @@ import { ImportHistory } from "../components/ImportHistory";
 import { Skeleton } from "../components/Skeleton";
 import { AlertsNotifications } from "../components/AlertsNotifications";
 import type { ModelPricing, WSMessage } from "../lib/types";
+
+// In-page navigation for the (dense) Settings screen. Each entry maps to a
+// `<section id>` rendered below; the TOC scroll-spies the active one.
+const SETTINGS_SECTIONS: {
+  id: string;
+  labelKey: string;
+  fallback?: string;
+  Icon: typeof DollarSign;
+}[] = [
+  { id: "pricing", labelKey: "pricing.title", Icon: DollarSign },
+  { id: "hooks", labelKey: "hooks.title", Icon: Plug },
+  { id: "claude-home", labelKey: "claudeHome.title", Icon: FolderOpen },
+  { id: "import", labelKey: "import.title", fallback: "Import", Icon: History },
+  { id: "tabby", labelKey: "tabby.title", fallback: "Tabby", Icon: Cat },
+  { id: "notifications", labelKey: "notifications.title", Icon: Bell },
+  { id: "alerts", labelKey: "alertsHub.title", Icon: BellRing },
+  { id: "data", labelKey: "data.title", Icon: Database },
+  { id: "about", labelKey: "about.title", Icon: Server },
+];
 
 // ─── Notification preferences ───
 
@@ -357,9 +378,30 @@ export function Settings() {
   const [claudeHomeInput, setClaudeHomeInput] = useState("");
   const [claudeHomeSaving, setClaudeHomeSaving] = useState(false);
   const [claudeHomeError, setClaudeHomeError] = useState<string | null>(null);
+  const [activeSection, setActiveSection] = useState<string>("pricing");
 
   const wsConnected = useSyncExternalStore(eventBus.onConnection, () => eventBus.connected);
   const animatedTotalCost = useCountUp(totalCost);
+
+  // Scroll-spy: highlight the TOC entry for the section nearest the top.
+  useEffect(() => {
+    if (loading) return;
+    const els = SETTINGS_SECTIONS.map((s) => document.getElementById(s.id)).filter(
+      (e): e is HTMLElement => !!e
+    );
+    if (els.length === 0) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible[0]) setActiveSection(visible[0].target.id);
+      },
+      { rootMargin: "-88px 0px -65% 0px", threshold: 0 }
+    );
+    els.forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  }, [loading]);
 
   const load = useCallback(async () => {
     try {
@@ -786,6 +828,35 @@ export function Settings() {
         </div>
       </div>
 
+      {/* In-page section navigation — Settings is dense, so this TOC jumps to
+          and scroll-spies each section. */}
+      <nav className="sticky top-0 z-20 -mx-1 px-1 py-2 bg-surface-0/85 backdrop-blur border-b border-border/60">
+        <div className="flex items-center gap-1.5 overflow-x-auto">
+          {SETTINGS_SECTIONS.map(({ id, labelKey, fallback, Icon }) => {
+            const active = activeSection === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() =>
+                  document
+                    .getElementById(id)
+                    ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                }
+                className={`inline-flex items-center gap-1.5 text-xs whitespace-nowrap px-2.5 py-1.5 rounded-lg border transition-colors flex-shrink-0 ${
+                  active
+                    ? "bg-accent/15 border-accent/30 text-accent"
+                    : "border-border text-gray-400 hover:text-gray-200 hover:bg-surface-3"
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                {t(labelKey, fallback ?? "")}
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+
       {/* Cost summary card */}
       <div className="card p-6">
         <div className="flex items-center justify-between flex-wrap gap-4">
@@ -816,7 +887,7 @@ export function Settings() {
       </div>
 
       {/* ─── MODEL PRICING ─── */}
-      <section>
+      <section id="pricing" className="scroll-mt-24">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div>
             <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2">
@@ -972,7 +1043,7 @@ export function Settings() {
       </section>
 
       {/* ─── HOOK CONFIGURATION ─── */}
-      <section>
+      <section id="hooks" className="scroll-mt-24">
         <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2 mb-1">
           <Plug className="w-4 h-4 text-gray-500" />
           {t("hooks.title")}
@@ -1032,7 +1103,7 @@ export function Settings() {
       </section>
 
       {/* ─── CLAUDE HOME ─── */}
-      <section>
+      <section id="claude-home" className="scroll-mt-24">
         <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2 mb-1">
           <FolderOpen className="w-4 h-4 text-gray-500" />
           {t("claudeHome.title")}
@@ -1069,10 +1140,12 @@ export function Settings() {
       </section>
 
       {/* ─── IMPORT HISTORY ─── */}
-      <ImportHistory />
+      <section id="import" className="scroll-mt-24">
+        <ImportHistory />
+      </section>
 
       {/* ─── TABBY COMPANION ─── */}
-      <section>
+      <section id="tabby" className="scroll-mt-24">
         <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2 mb-1">
           <span className="text-base leading-none" aria-hidden>
             🐾
@@ -1110,7 +1183,7 @@ export function Settings() {
       </section>
 
       {/* ─── NOTIFICATIONS ─── */}
-      <section>
+      <section id="notifications" className="scroll-mt-24">
         <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2 mb-1">
           <Bell className="w-4 h-4 text-gray-500" />
           {t("notifications.title")}
@@ -1250,7 +1323,7 @@ export function Settings() {
       </section>
 
       {/* ─── ALERTS ─── */}
-      <section>
+      <section id="alerts" className="scroll-mt-24">
         <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2 mb-1">
           <BellRing className="w-4 h-4 text-gray-500" />
           {t("alertsHub.title")}
@@ -1260,7 +1333,7 @@ export function Settings() {
       </section>
 
       {/* ─── DATA MANAGEMENT ─── */}
-      <section>
+      <section id="data" className="scroll-mt-24">
         <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2 mb-1">
           <Database className="w-4 h-4 text-gray-500" />
           {t("data.title")}
@@ -1453,7 +1526,7 @@ export function Settings() {
       </section>
 
       {/* ─── ABOUT ─── */}
-      <section>
+      <section id="about" className="scroll-mt-24">
         <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2 mb-1">
           <Server className="w-4 h-4 text-gray-500" />
           {t("about.title")}

@@ -7488,6 +7488,288 @@ exports[`screen snapshots > Settings 1`] = `
         </button>
       </div>
     </div>
+    <nav
+      class="sticky top-0 z-20 -mx-1 px-1 py-2 bg-surface-0/85 backdrop-blur border-b border-border/60"
+    >
+      <div
+        class="flex items-center gap-1.5 overflow-x-auto"
+      >
+        <button
+          class="inline-flex items-center gap-1.5 text-xs whitespace-nowrap px-2.5 py-1.5 rounded-lg border transition-colors flex-shrink-0 bg-accent/15 border-accent/30 text-accent"
+          type="button"
+        >
+          <svg
+            class="lucide lucide-dollar-sign w-3.5 h-3.5"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <line
+              x1="12"
+              x2="12"
+              y1="2"
+              y2="22"
+            />
+            <path
+              d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"
+            />
+          </svg>
+          Model Pricing
+        </button>
+        <button
+          class="inline-flex items-center gap-1.5 text-xs whitespace-nowrap px-2.5 py-1.5 rounded-lg border transition-colors flex-shrink-0 border-border text-gray-400 hover:text-gray-200 hover:bg-surface-3"
+          type="button"
+        >
+          <svg
+            class="lucide lucide-plug w-3.5 h-3.5"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M12 22v-5"
+            />
+            <path
+              d="M9 8V2"
+            />
+            <path
+              d="M15 8V2"
+            />
+            <path
+              d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"
+            />
+          </svg>
+          Hook Configuration
+        </button>
+        <button
+          class="inline-flex items-center gap-1.5 text-xs whitespace-nowrap px-2.5 py-1.5 rounded-lg border transition-colors flex-shrink-0 border-border text-gray-400 hover:text-gray-200 hover:bg-surface-3"
+          type="button"
+        >
+          <svg
+            class="lucide lucide-folder-open w-3.5 h-3.5"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"
+            />
+          </svg>
+          CLAUDE_HOME
+        </button>
+        <button
+          class="inline-flex items-center gap-1.5 text-xs whitespace-nowrap px-2.5 py-1.5 rounded-lg border transition-colors flex-shrink-0 border-border text-gray-400 hover:text-gray-200 hover:bg-surface-3"
+          type="button"
+        >
+          <svg
+            class="lucide lucide-history w-3.5 h-3.5"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"
+            />
+            <path
+              d="M3 3v5h5"
+            />
+            <path
+              d="M12 7v5l4 2"
+            />
+          </svg>
+          Import History
+        </button>
+        <button
+          class="inline-flex items-center gap-1.5 text-xs whitespace-nowrap px-2.5 py-1.5 rounded-lg border transition-colors flex-shrink-0 border-border text-gray-400 hover:text-gray-200 hover:bg-surface-3"
+          type="button"
+        >
+          <svg
+            class="lucide lucide-cat w-3.5 h-3.5"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M12 5c.67 0 1.35.09 2 .26 1.78-2 5.03-2.84 6.42-2.26 1.4.58-.42 7-.42 7 .57 1.07 1 2.24 1 3.44C21 17.9 16.97 21 12 21s-9-3-9-7.56c0-1.25.5-2.4 1-3.44 0 0-1.89-6.42-.5-7 1.39-.58 4.72.23 6.5 2.23A9.04 9.04 0 0 1 12 5Z"
+            />
+            <path
+              d="M8 14v.5"
+            />
+            <path
+              d="M16 14v.5"
+            />
+            <path
+              d="M11.25 16.25h1.5L12 17l-.75-.75Z"
+            />
+          </svg>
+          Tabby companion
+        </button>
+        <button
+          class="inline-flex items-center gap-1.5 text-xs whitespace-nowrap px-2.5 py-1.5 rounded-lg border transition-colors flex-shrink-0 border-border text-gray-400 hover:text-gray-200 hover:bg-surface-3"
+          type="button"
+        >
+          <svg
+            class="lucide lucide-bell w-3.5 h-3.5"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M10.268 21a2 2 0 0 0 3.464 0"
+            />
+            <path
+              d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"
+            />
+          </svg>
+          Notifications
+        </button>
+        <button
+          class="inline-flex items-center gap-1.5 text-xs whitespace-nowrap px-2.5 py-1.5 rounded-lg border transition-colors flex-shrink-0 border-border text-gray-400 hover:text-gray-200 hover:bg-surface-3"
+          type="button"
+        >
+          <svg
+            class="lucide lucide-bell-ring w-3.5 h-3.5"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M10.268 21a2 2 0 0 0 3.464 0"
+            />
+            <path
+              d="M22 8c0-2.3-.8-4.3-2-6"
+            />
+            <path
+              d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"
+            />
+            <path
+              d="M4 2C2.8 3.7 2 5.7 2 8"
+            />
+          </svg>
+          Alerts
+        </button>
+        <button
+          class="inline-flex items-center gap-1.5 text-xs whitespace-nowrap px-2.5 py-1.5 rounded-lg border transition-colors flex-shrink-0 border-border text-gray-400 hover:text-gray-200 hover:bg-surface-3"
+          type="button"
+        >
+          <svg
+            class="lucide lucide-database w-3.5 h-3.5"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <ellipse
+              cx="12"
+              cy="5"
+              rx="9"
+              ry="3"
+            />
+            <path
+              d="M3 5V19A9 3 0 0 0 21 19V5"
+            />
+            <path
+              d="M3 12A9 3 0 0 0 21 12"
+            />
+          </svg>
+          Data Management
+        </button>
+        <button
+          class="inline-flex items-center gap-1.5 text-xs whitespace-nowrap px-2.5 py-1.5 rounded-lg border transition-colors flex-shrink-0 border-border text-gray-400 hover:text-gray-200 hover:bg-surface-3"
+          type="button"
+        >
+          <svg
+            class="lucide lucide-server w-3.5 h-3.5"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <rect
+              height="8"
+              rx="2"
+              ry="2"
+              width="20"
+              x="2"
+              y="2"
+            />
+            <rect
+              height="8"
+              rx="2"
+              ry="2"
+              width="20"
+              x="2"
+              y="14"
+            />
+            <line
+              x1="6"
+              x2="6.01"
+              y1="6"
+              y2="6"
+            />
+            <line
+              x1="6"
+              x2="6.01"
+              y1="18"
+              y2="18"
+            />
+          </svg>
+          About
+        </button>
+      </div>
+    </nav>
     <div
       class="card p-6"
     >
@@ -7552,7 +7834,10 @@ exports[`screen snapshots > Settings 1`] = `
         </div>
       </div>
     </div>
-    <section>
+    <section
+      class="scroll-mt-24"
+      id="pricing"
+    >
       <div
         class="flex flex-wrap items-center justify-between gap-3 mb-4"
       >
@@ -7742,7 +8027,10 @@ exports[`screen snapshots > Settings 1`] = `
         </table>
       </div>
     </section>
-    <section>
+    <section
+      class="scroll-mt-24"
+      id="hooks"
+    >
       <h3
         class="text-sm font-medium text-gray-300 flex items-center gap-2 mb-1"
       >
@@ -7848,7 +8136,10 @@ exports[`screen snapshots > Settings 1`] = `
         </p>
       </div>
     </section>
-    <section>
+    <section
+      class="scroll-mt-24"
+      id="claude-home"
+    >
       <h3
         class="text-sm font-medium text-gray-300 flex items-center gap-2 mb-1"
       >
@@ -7907,143 +8198,300 @@ exports[`screen snapshots > Settings 1`] = `
         </p>
       </div>
     </section>
-    <section>
-      <h3
-        class="text-sm font-medium text-gray-300 flex items-center gap-2 mb-1"
-      >
-        <svg
-          class="lucide lucide-history w-4 h-4 text-gray-500"
-          fill="none"
-          height="24"
-          stroke="currentColor"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2"
-          viewBox="0 0 24 24"
-          width="24"
-          xmlns="http://www.w3.org/2000/svg"
+    <section
+      class="scroll-mt-24"
+      id="import"
+    >
+      <section>
+        <h3
+          class="text-sm font-medium text-gray-300 flex items-center gap-2 mb-1"
         >
-          <path
-            d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"
-          />
-          <path
-            d="M3 3v5h5"
-          />
-          <path
-            d="M12 7v5l4 2"
-          />
-        </svg>
-        Import History
-      </h3>
-      <p
-        class="text-xs text-gray-500 mb-4"
-      >
-        Bring existing Claude Code sessions into the dashboard. Token counts, per-model cost, compactions, subagents, tool uses, and turn durations are reconstructed from the original JSONL transcripts — identical to how live sessions are captured.
-      </p>
-      <div
-        class="card p-5 space-y-5"
-      >
+          <svg
+            class="lucide lucide-history w-4 h-4 text-gray-500"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"
+            />
+            <path
+              d="M3 3v5h5"
+            />
+            <path
+              d="M12 7v5l4 2"
+            />
+          </svg>
+          Import History
+        </h3>
+        <p
+          class="text-xs text-gray-500 mb-4"
+        >
+          Bring existing Claude Code sessions into the dashboard. Token counts, per-model cost, compactions, subagents, tool uses, and turn durations are reconstructed from the original JSONL transcripts — identical to how live sessions are captured.
+        </p>
         <div
-          class="border border-border rounded-lg overflow-hidden"
+          class="card p-5 space-y-5"
         >
-          <button
-            class="w-full flex items-center justify-between px-4 py-3 bg-surface-2 hover:bg-surface-3 transition-colors"
-          >
-            <span
-              class="flex items-center gap-2 text-xs font-semibold text-gray-300 uppercase tracking-wider"
-            >
-              <svg
-                class="lucide lucide-list-checks w-3.5 h-3.5 text-blue-400"
-                fill="none"
-                height="24"
-                stroke="currentColor"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                viewBox="0 0 24 24"
-                width="24"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="m3 17 2 2 4-4"
-                />
-                <path
-                  d="m3 7 2 2 4-4"
-                />
-                <path
-                  d="M13 6h8"
-                />
-                <path
-                  d="M13 12h8"
-                />
-                <path
-                  d="M13 18h8"
-                />
-              </svg>
-              How to gather your history
-            </span>
-            <span
-              class="text-[11px] text-gray-500"
-            >
-              ▾
-            </span>
-          </button>
           <div
-            class="px-4 py-4 space-y-4 text-sm text-gray-300 bg-surface-1"
+            class="border border-border rounded-lg overflow-hidden"
           >
-            <div
-              class="flex flex-wrap items-center gap-2 text-xs bg-surface-2 border border-border rounded-md px-3 py-2"
+            <button
+              class="w-full flex items-center justify-between px-4 py-3 bg-surface-2 hover:bg-surface-3 transition-colors"
             >
-              <svg
-                class="lucide lucide-hard-drive w-3.5 h-3.5 text-gray-500 flex-shrink-0"
-                fill="none"
-                height="24"
-                stroke="currentColor"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                viewBox="0 0 24 24"
-                width="24"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <line
-                  x1="22"
-                  x2="2"
-                  y1="12"
-                  y2="12"
-                />
-                <path
-                  d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
-                />
-                <line
-                  x1="6"
-                  x2="6.01"
-                  y1="16"
-                  y2="16"
-                />
-                <line
-                  x1="10"
-                  x2="10.01"
-                  y1="16"
-                  y2="16"
-                />
-              </svg>
               <span
-                class="text-gray-400"
-              >
-                Default location on this machine
-                :
-              </span>
-              <code
-                class="font-mono text-gray-200 truncate"
-              >
-                ~/.claude/projects
-              </code>
-              <span
-                class="inline-flex items-center gap-1 text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full"
+                class="flex items-center gap-2 text-xs font-semibold text-gray-300 uppercase tracking-wider"
               >
                 <svg
-                  class="lucide lucide-circle-check w-3 h-3"
+                  class="lucide lucide-list-checks w-3.5 h-3.5 text-blue-400"
+                  fill="none"
+                  height="24"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="m3 17 2 2 4-4"
+                  />
+                  <path
+                    d="m3 7 2 2 4-4"
+                  />
+                  <path
+                    d="M13 6h8"
+                  />
+                  <path
+                    d="M13 12h8"
+                  />
+                  <path
+                    d="M13 18h8"
+                  />
+                </svg>
+                How to gather your history
+              </span>
+              <span
+                class="text-[11px] text-gray-500"
+              >
+                ▾
+              </span>
+            </button>
+            <div
+              class="px-4 py-4 space-y-4 text-sm text-gray-300 bg-surface-1"
+            >
+              <div
+                class="flex flex-wrap items-center gap-2 text-xs bg-surface-2 border border-border rounded-md px-3 py-2"
+              >
+                <svg
+                  class="lucide lucide-hard-drive w-3.5 h-3.5 text-gray-500 flex-shrink-0"
+                  fill="none"
+                  height="24"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <line
+                    x1="22"
+                    x2="2"
+                    y1="12"
+                    y2="12"
+                  />
+                  <path
+                    d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                  />
+                  <line
+                    x1="6"
+                    x2="6.01"
+                    y1="16"
+                    y2="16"
+                  />
+                  <line
+                    x1="10"
+                    x2="10.01"
+                    y1="16"
+                    y2="16"
+                  />
+                </svg>
+                <span
+                  class="text-gray-400"
+                >
+                  Default location on this machine
+                  :
+                </span>
+                <code
+                  class="font-mono text-gray-200 truncate"
+                >
+                  ~/.claude/projects
+                </code>
+                <span
+                  class="inline-flex items-center gap-1 text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full"
+                >
+                  <svg
+                    class="lucide lucide-circle-check w-3 h-3"
+                    fill="none"
+                    height="24"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    viewBox="0 0 24 24"
+                    width="24"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <circle
+                      cx="12"
+                      cy="12"
+                      r="10"
+                    />
+                    <path
+                      d="m9 12 2 2 4-4"
+                    />
+                  </svg>
+                  Folder found
+                  <span
+                    class="text-gray-500 ml-1"
+                  >
+                    · 
+                    0
+                     
+                    projects
+                    ,
+                     
+                    0
+                     
+                    JSONL files
+                  </span>
+                </span>
+              </div>
+              <div
+                class="space-y-3"
+              >
+                <div>
+                  <p
+                    class="text-sm font-medium text-gray-200"
+                  >
+                    1. Locate your Claude Code history
+                  </p>
+                  <p
+                    class="text-xs text-gray-400 mt-1 whitespace-pre-line"
+                  >
+                    Every Claude Code session is stored as a JSONL transcript under the projects folder. Each subfolder is named after the working directory where the session started (slashes replaced with dashes).
+                  </p>
+                </div>
+                <div>
+                  <p
+                    class="text-sm font-medium text-gray-200"
+                  >
+                    2. Bundle it for transfer (optional)
+                  </p>
+                  <p
+                    class="text-xs text-gray-400 mt-1 whitespace-pre-line"
+                  >
+                    To move history from another machine, archive the whole folder first, then copy it over (AirDrop, scp, USB, cloud storage):
+                  </p>
+                  <div
+                    class="mt-2 flex items-center gap-2 bg-surface-2 border border-border rounded-md px-3 py-2"
+                  >
+                    <svg
+                      class="lucide lucide-terminal w-3.5 h-3.5 text-gray-500 flex-shrink-0"
+                      fill="none"
+                      height="24"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      viewBox="0 0 24 24"
+                      width="24"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <polyline
+                        points="4 17 10 11 4 5"
+                      />
+                      <line
+                        x1="12"
+                        x2="20"
+                        y1="19"
+                        y2="19"
+                      />
+                    </svg>
+                    <code
+                      class="flex-1 text-xs font-mono text-gray-200 truncate"
+                    >
+                      tar
+                    </code>
+                    <button
+                      class="text-xs text-gray-400 hover:text-gray-200 flex items-center gap-1 flex-shrink-0"
+                    >
+                      <svg
+                        class="lucide lucide-copy w-3 h-3"
+                        fill="none"
+                        height="24"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        viewBox="0 0 24 24"
+                        width="24"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <rect
+                          height="14"
+                          rx="2"
+                          ry="2"
+                          width="14"
+                          x="8"
+                          y="8"
+                        />
+                        <path
+                          d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"
+                        />
+                      </svg>
+                       
+                      Copy
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <p
+                    class="text-sm font-medium text-gray-200"
+                  >
+                    3. Pick an import mode below
+                  </p>
+                  <p
+                    class="text-xs text-gray-400 mt-1 whitespace-pre-line"
+                  >
+                    Rescan the default location, point at any folder you've extracted history into, or upload files/archives directly.
+                  </p>
+                </div>
+                <div>
+                  <p
+                    class="text-sm font-medium text-gray-200"
+                  >
+                    4. Verify tokens and cost
+                  </p>
+                  <p
+                    class="text-xs text-gray-400 mt-1 whitespace-pre-line"
+                  >
+                    After import, open Analytics → Cost to confirm the breakdown. Re-importing the same session is always safe.
+                  </p>
+                </div>
+              </div>
+              <div
+                class="text-[11px] text-gray-500 flex items-start gap-2 pt-2 border-t border-border"
+              >
+                <svg
+                  class="lucide lucide-info w-3 h-3 mt-0.5 flex-shrink-0"
                   fill="none"
                   height="24"
                   stroke="currentColor"
@@ -8060,352 +8508,203 @@ exports[`screen snapshots > Settings 1`] = `
                     r="10"
                   />
                   <path
-                    d="m9 12 2 2 4-4"
+                    d="M12 16v-4"
+                  />
+                  <path
+                    d="M12 8h.01"
                   />
                 </svg>
-                Folder found
-                <span
-                  class="text-gray-500 ml-1"
-                >
-                  · 
-                  0
-                   
-                  projects
-                  ,
-                   
-                  0
-                   
-                  JSONL files
+                <span>
+                  Re-running is safe. Sessions are deduplicated by session ID, and compaction baselines ensure token totals never double-count.
                 </span>
-              </span>
-            </div>
-            <div
-              class="space-y-3"
-            >
-              <div>
-                <p
-                  class="text-sm font-medium text-gray-200"
-                >
-                  1. Locate your Claude Code history
-                </p>
-                <p
-                  class="text-xs text-gray-400 mt-1 whitespace-pre-line"
-                >
-                  Every Claude Code session is stored as a JSONL transcript under the projects folder. Each subfolder is named after the working directory where the session started (slashes replaced with dashes).
-                </p>
               </div>
-              <div>
-                <p
-                  class="text-sm font-medium text-gray-200"
-                >
-                  2. Bundle it for transfer (optional)
-                </p>
-                <p
-                  class="text-xs text-gray-400 mt-1 whitespace-pre-line"
-                >
-                  To move history from another machine, archive the whole folder first, then copy it over (AirDrop, scp, USB, cloud storage):
-                </p>
-                <div
-                  class="mt-2 flex items-center gap-2 bg-surface-2 border border-border rounded-md px-3 py-2"
-                >
-                  <svg
-                    class="lucide lucide-terminal w-3.5 h-3.5 text-gray-500 flex-shrink-0"
-                    fill="none"
-                    height="24"
-                    stroke="currentColor"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    stroke-width="2"
-                    viewBox="0 0 24 24"
-                    width="24"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <polyline
-                      points="4 17 10 11 4 5"
-                    />
-                    <line
-                      x1="12"
-                      x2="20"
-                      y1="19"
-                      y2="19"
-                    />
-                  </svg>
-                  <code
-                    class="flex-1 text-xs font-mono text-gray-200 truncate"
-                  >
-                    tar
-                  </code>
-                  <button
-                    class="text-xs text-gray-400 hover:text-gray-200 flex items-center gap-1 flex-shrink-0"
-                  >
-                    <svg
-                      class="lucide lucide-copy w-3 h-3"
-                      fill="none"
-                      height="24"
-                      stroke="currentColor"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      viewBox="0 0 24 24"
-                      width="24"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <rect
-                        height="14"
-                        rx="2"
-                        ry="2"
-                        width="14"
-                        x="8"
-                        y="8"
-                      />
-                      <path
-                        d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"
-                      />
-                    </svg>
-                     
-                    Copy
-                  </button>
-                </div>
-              </div>
-              <div>
-                <p
-                  class="text-sm font-medium text-gray-200"
-                >
-                  3. Pick an import mode below
-                </p>
-                <p
-                  class="text-xs text-gray-400 mt-1 whitespace-pre-line"
-                >
-                  Rescan the default location, point at any folder you've extracted history into, or upload files/archives directly.
-                </p>
-              </div>
-              <div>
-                <p
-                  class="text-sm font-medium text-gray-200"
-                >
-                  4. Verify tokens and cost
-                </p>
-                <p
-                  class="text-xs text-gray-400 mt-1 whitespace-pre-line"
-                >
-                  After import, open Analytics → Cost to confirm the breakdown. Re-importing the same session is always safe.
-                </p>
-              </div>
-            </div>
-            <div
-              class="text-[11px] text-gray-500 flex items-start gap-2 pt-2 border-t border-border"
-            >
-              <svg
-                class="lucide lucide-info w-3 h-3 mt-0.5 flex-shrink-0"
-                fill="none"
-                height="24"
-                stroke="currentColor"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                viewBox="0 0 24 24"
-                width="24"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <circle
-                  cx="12"
-                  cy="12"
-                  r="10"
-                />
-                <path
-                  d="M12 16v-4"
-                />
-                <path
-                  d="M12 8h.01"
-                />
-              </svg>
-              <span>
-                Re-running is safe. Sessions are deduplicated by session ID, and compaction baselines ensure token totals never double-count.
-              </span>
             </div>
           </div>
-        </div>
-        <div
-          class="grid grid-cols-1 sm:grid-cols-3 gap-2"
-        >
-          <button
-            class="text-left p-3 rounded-lg border transition-colors border-blue-500/40 bg-blue-500/10"
-          >
-            <div
-              class="flex items-center gap-1.5 text-xs font-medium mb-1 text-blue-300"
-            >
-              <svg
-                class="lucide lucide-refresh-cw w-3.5 h-3.5"
-                fill="none"
-                height="24"
-                stroke="currentColor"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                viewBox="0 0 24 24"
-                width="24"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"
-                />
-                <path
-                  d="M21 3v5h-5"
-                />
-                <path
-                  d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"
-                />
-                <path
-                  d="M8 16H3v5"
-                />
-              </svg>
-              Rescan default folder
-            </div>
-            <p
-              class="text-[11px] text-gray-500 leading-snug"
-            >
-              Re-read ~/.claude/projects and import anything new.
-            </p>
-          </button>
-          <button
-            class="text-left p-3 rounded-lg border transition-colors border-border bg-surface-2 hover:bg-surface-3"
-          >
-            <div
-              class="flex items-center gap-1.5 text-xs font-medium mb-1 text-gray-300"
-            >
-              <svg
-                class="lucide lucide-folder-input w-3.5 h-3.5"
-                fill="none"
-                height="24"
-                stroke="currentColor"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                viewBox="0 0 24 24"
-                width="24"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M2 9V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1"
-                />
-                <path
-                  d="M2 13h10"
-                />
-                <path
-                  d="m9 16 3-3-3-3"
-                />
-              </svg>
-              Scan a folder
-            </div>
-            <p
-              class="text-[11px] text-gray-500 leading-snug"
-            >
-              Scan any directory on this machine for JSONL transcripts (walks subfolders).
-            </p>
-          </button>
-          <button
-            class="text-left p-3 rounded-lg border transition-colors border-border bg-surface-2 hover:bg-surface-3"
-          >
-            <div
-              class="flex items-center gap-1.5 text-xs font-medium mb-1 text-gray-300"
-            >
-              <svg
-                class="lucide lucide-cloud-upload w-3.5 h-3.5"
-                fill="none"
-                height="24"
-                stroke="currentColor"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                viewBox="0 0 24 24"
-                width="24"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M12 13v8"
-                />
-                <path
-                  d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"
-                />
-                <path
-                  d="m8 17 4-4 4 4"
-                />
-              </svg>
-              Upload files
-            </div>
-            <p
-              class="text-[11px] text-gray-500 leading-snug"
-            >
-              Drop JSONL files or an archive (.zip / .tar.gz) directly into the browser.
-            </p>
-          </button>
-        </div>
-        <div
-          class="bg-surface-2 border border-border rounded-lg p-4"
-        >
           <div
-            class="flex flex-wrap items-center justify-between gap-3"
+            class="grid grid-cols-1 sm:grid-cols-3 gap-2"
           >
-            <div
-              class="flex items-center gap-3 min-w-0"
-            >
-              <svg
-                class="lucide lucide-folder-open w-4 h-4 text-gray-500 flex-shrink-0"
-                fill="none"
-                height="24"
-                stroke="currentColor"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                viewBox="0 0 24 24"
-                width="24"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"
-                />
-              </svg>
-              <code
-                class="font-mono text-xs text-gray-300 truncate"
-              >
-                ~/.claude/projects
-              </code>
-            </div>
             <button
-              class="btn-primary text-xs disabled:opacity-50"
+              class="text-left p-3 rounded-lg border transition-colors border-blue-500/40 bg-blue-500/10"
             >
-              <svg
-                class="lucide lucide-refresh-cw w-3.5 h-3.5"
-                fill="none"
-                height="24"
-                stroke="currentColor"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                viewBox="0 0 24 24"
-                width="24"
-                xmlns="http://www.w3.org/2000/svg"
+              <div
+                class="flex items-center gap-1.5 text-xs font-medium mb-1 text-blue-300"
               >
-                <path
-                  d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"
-                />
-                <path
-                  d="M21 3v5h-5"
-                />
-                <path
-                  d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"
-                />
-                <path
-                  d="M8 16H3v5"
-                />
-              </svg>
-              Rescan Now
+                <svg
+                  class="lucide lucide-refresh-cw w-3.5 h-3.5"
+                  fill="none"
+                  height="24"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"
+                  />
+                  <path
+                    d="M21 3v5h-5"
+                  />
+                  <path
+                    d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"
+                  />
+                  <path
+                    d="M8 16H3v5"
+                  />
+                </svg>
+                Rescan default folder
+              </div>
+              <p
+                class="text-[11px] text-gray-500 leading-snug"
+              >
+                Re-read ~/.claude/projects and import anything new.
+              </p>
+            </button>
+            <button
+              class="text-left p-3 rounded-lg border transition-colors border-border bg-surface-2 hover:bg-surface-3"
+            >
+              <div
+                class="flex items-center gap-1.5 text-xs font-medium mb-1 text-gray-300"
+              >
+                <svg
+                  class="lucide lucide-folder-input w-3.5 h-3.5"
+                  fill="none"
+                  height="24"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M2 9V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1"
+                  />
+                  <path
+                    d="M2 13h10"
+                  />
+                  <path
+                    d="m9 16 3-3-3-3"
+                  />
+                </svg>
+                Scan a folder
+              </div>
+              <p
+                class="text-[11px] text-gray-500 leading-snug"
+              >
+                Scan any directory on this machine for JSONL transcripts (walks subfolders).
+              </p>
+            </button>
+            <button
+              class="text-left p-3 rounded-lg border transition-colors border-border bg-surface-2 hover:bg-surface-3"
+            >
+              <div
+                class="flex items-center gap-1.5 text-xs font-medium mb-1 text-gray-300"
+              >
+                <svg
+                  class="lucide lucide-cloud-upload w-3.5 h-3.5"
+                  fill="none"
+                  height="24"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M12 13v8"
+                  />
+                  <path
+                    d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"
+                  />
+                  <path
+                    d="m8 17 4-4 4 4"
+                  />
+                </svg>
+                Upload files
+              </div>
+              <p
+                class="text-[11px] text-gray-500 leading-snug"
+              >
+                Drop JSONL files or an archive (.zip / .tar.gz) directly into the browser.
+              </p>
             </button>
           </div>
+          <div
+            class="bg-surface-2 border border-border rounded-lg p-4"
+          >
+            <div
+              class="flex flex-wrap items-center justify-between gap-3"
+            >
+              <div
+                class="flex items-center gap-3 min-w-0"
+              >
+                <svg
+                  class="lucide lucide-folder-open w-4 h-4 text-gray-500 flex-shrink-0"
+                  fill="none"
+                  height="24"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"
+                  />
+                </svg>
+                <code
+                  class="font-mono text-xs text-gray-300 truncate"
+                >
+                  ~/.claude/projects
+                </code>
+              </div>
+              <button
+                class="btn-primary text-xs disabled:opacity-50"
+              >
+                <svg
+                  class="lucide lucide-refresh-cw w-3.5 h-3.5"
+                  fill="none"
+                  height="24"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"
+                  />
+                  <path
+                    d="M21 3v5h-5"
+                  />
+                  <path
+                    d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"
+                  />
+                  <path
+                    d="M8 16H3v5"
+                  />
+                </svg>
+                Rescan Now
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
+      </section>
     </section>
-    <section>
+    <section
+      class="scroll-mt-24"
+      id="tabby"
+    >
       <h3
         class="text-sm font-medium text-gray-300 flex items-center gap-2 mb-1"
       >
@@ -8469,7 +8768,10 @@ exports[`screen snapshots > Settings 1`] = `
         </div>
       </div>
     </section>
-    <section>
+    <section
+      class="scroll-mt-24"
+      id="notifications"
+    >
       <h3
         class="text-sm font-medium text-gray-300 flex items-center gap-2 mb-1"
       >
@@ -8594,7 +8896,10 @@ exports[`screen snapshots > Settings 1`] = `
         </div>
       </div>
     </section>
-    <section>
+    <section
+      class="scroll-mt-24"
+      id="alerts"
+    >
       <h3
         class="text-sm font-medium text-gray-300 flex items-center gap-2 mb-1"
       >
@@ -8819,7 +9124,10 @@ exports[`screen snapshots > Settings 1`] = `
         </div>
       </div>
     </section>
-    <section>
+    <section
+      class="scroll-mt-24"
+      id="data"
+    >
       <h3
         class="text-sm font-medium text-gray-300 flex items-center gap-2 mb-1"
       >
@@ -9170,7 +9478,10 @@ exports[`screen snapshots > Settings 1`] = `
         </div>
       </div>
     </section>
-    <section>
+    <section
+      class="scroll-mt-24"
+      id="about"
+    >
       <h3
         class="text-sm font-medium text-gray-300 flex items-center gap-2 mb-1"
       >
