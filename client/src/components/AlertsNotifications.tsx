@@ -500,13 +500,13 @@ export function AlertsNotifications() {
 
               <div className="flex flex-wrap items-end justify-between gap-3">
                 <label className="block text-xs text-gray-400">
-                  {t("rules.form.cooldown")}
+                  <span className="block mb-1.5">{t("rules.form.cooldown")}</span>
                   <input
                     type="number"
                     min={0}
                     value={form.cooldown_seconds}
                     onChange={(e) => set({ cooldown_seconds: e.target.value })}
-                    className="input mt-1 w-40"
+                    className="input w-40"
                   />
                 </label>
                 <button
