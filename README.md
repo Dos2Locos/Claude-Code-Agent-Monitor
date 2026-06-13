@@ -581,6 +581,9 @@ For git clones, the server periodically `git fetch`es `origin` and compares your
 | `npm run dev:client`    | Start only the Vite dev server                             |
 | `npm run build`         | Build the React client to `client/dist/`                   |
 | `npm start`             | Start production server (serves built client)              |
+| `npm test`              | Run the full suite (server `node --test` + client Vitest)  |
+| `npm run test:server`   | Run backend tests (`node --test server/__tests__/`)        |
+| `npm run test:client`   | Run frontend Vitest tests, including **render snapshots for every screen** (`client/src/pages/__tests__/screens.snapshot.test.tsx`); regenerate baselines after intentional UI changes with `cd client && npx vitest run -u` |
 | `npm run install-hooks` | Configure Claude Code hooks in `~/.claude/settings.json`   |
 | `npm run seed`          | Populate database with sample data                         |
 | `npm run import-history`| Import legacy sessions from `~/.claude/` (also runs on startup) |
