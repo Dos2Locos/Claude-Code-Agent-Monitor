@@ -17,6 +17,7 @@
     "empty": "No workflow runs yet. Runs from the Workflow tool appear here once their journal is written (at completion).",
     "noAgents": "No inner agents recorded for this run.",
     "openSession": "Open parent session",
+    "resultsLabel": "Results",
     "tokens": "tokens",
     "agents_one": "{{count}} agent",
     "agents_other": "{{count}} agents",

@@ -17,6 +17,7 @@
     "empty": "Chưa có lần chạy quy trình nào. Các lần chạy của công cụ Workflow hiện ở đây sau khi nhật ký được ghi (khi hoàn tất).",
     "noAgents": "Không có Agent con nào được ghi cho lần chạy này.",
     "openSession": "Mở phiên gốc",
+    "resultsLabel": "Kết quả",
     "tokens": "token",
     "agents_one": "{{count}} Agent",
     "agents_other": "{{count}} Agent",

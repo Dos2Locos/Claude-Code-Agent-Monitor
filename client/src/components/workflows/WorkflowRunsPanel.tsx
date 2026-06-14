@@ -46,6 +46,30 @@ function statusClass(status: string): string {
   return STATUS_STYLES[status] || "bg-gray-500/15 text-gray-400 border-gray-500/30";
 }
 
+/**
+ * Surface a human-readable excerpt from an agent's result preview, which is
+ * often a (frequently truncated) JSON blob. Prefer a known content field, then
+ * the first substantial quoted string, then a de-JSON'd snippet — so the panel
+ * shows a sentence instead of raw `{"angle":"…","findings":[{"claim":"…`.
+ */
+function friendlyPreview(raw: unknown): string {
+  if (!raw) return "";
+  const s = String(raw).trim();
+  const keyed = s.match(
+    /"(?:claim|pitch|note|text|summary|result|answer|brief|description|title|content)"\s*:\s*"([^"\\]{8,})/i
+  );
+  if (keyed && keyed[1]) return keyed[1].trim();
+  const firstLong = s.match(/"([^"\\]{24,})"/);
+  if (firstLong && firstLong[1]) return firstLong[1].trim();
+  if (/^[[{]/.test(s)) {
+    return s
+      .replace(/[{}[\]"]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+  return s;
+}
+
 export function WorkflowRunsPanel({
   runs: controlledRuns,
   statusFilter,
@@ -249,16 +273,21 @@ export function WorkflowRunsPanel({
                   <p className="text-[11px] text-gray-600">{t("runs.noAgents")}</p>
                 )}
 
-                {agentRows.some((a) => a.promptPreview || a.resultPreview) && (
-                  <div className="space-y-1">
+                {agentRows.some((a) => a.resultPreview) && (
+                  <div className="space-y-1.5">
+                    <div className="text-[10px] font-medium uppercase tracking-wider text-gray-600">
+                      {t("runs.resultsLabel")}
+                    </div>
                     {agentRows
                       .filter((a) => a.resultPreview)
-                      .slice(0, 3)
+                      .slice(0, 4)
                       .map((a, i) => (
-                        <p key={i} className="text-[11px] text-gray-500">
-                          <span className="text-gray-400">{a.label || a.agentType}:</span>{" "}
-                          {truncate(String(a.resultPreview), 160)}
-                        </p>
+                        <div key={i} className="text-[11px] text-gray-500 leading-snug">
+                          <span className="badge mr-1.5 border border-gray-700 bg-gray-700/40 text-[10px] text-gray-300">
+                            {a.label || a.agentType || a.agentId}
+                          </span>
+                          {truncate(friendlyPreview(a.resultPreview), 200)}
+                        </div>
                       ))}
                   </div>
                 )}
