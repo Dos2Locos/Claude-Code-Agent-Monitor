@@ -22,6 +22,7 @@
     "resultsLabel": "Kết quả",
     "promptLabel": "Lời nhắc",
     "resultLabel": "Kết quả",
+    "loadingFull": "Đang tải toàn bộ nội dung…",
     "tokens": "token",
     "agents_one": "{{count}} Agent",
     "agents_other": "{{count}} Agent",

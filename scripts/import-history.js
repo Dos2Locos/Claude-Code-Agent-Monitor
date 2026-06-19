@@ -64,6 +64,16 @@ function snapshotTranscript(sourceJsonlPath, sessionId) {
       if (path.resolve(destSub) === path.resolve(subPath)) continue;
       copyIfNewer(subPath, destSub);
     }
+
+    // Workflow-tool inner-agent transcripts live nested at
+    // `<sessionId>/subagents/workflows/<runId>/agent-*.jsonl`. Preserve the
+    // `workflows/<runId>/` subpath so the read route resolves the snapshot the
+    // same way it resolves the live nested file (see getSnapshotSubagentTranscriptPath).
+    for (const sub of findSessionWorkflowSubagents(sourceJsonlPath)) {
+      const destSub = path.join(snapDir, sessionId, "subagents", sub.rel);
+      if (path.resolve(destSub) === path.resolve(sub.abs)) continue;
+      copyIfNewer(sub.abs, destSub);
+    }
   } catch {
     /* non-fatal: metadata import already succeeded */
   }
@@ -1764,6 +1774,48 @@ function findSessionSubagents(sessionJsonlPath) {
 }
 
 /**
+ * Given a session JSONL path, return any Workflow-tool inner-agent transcripts,
+ * which Claude Code writes NESTED at
+ *   <sessionId>/subagents/workflows/<runId>/agent-*.jsonl
+ * (one level deeper than the flat sub-agent transcripts findSessionSubagents
+ * returns). Kept separate so the regular sub-agent import path is unchanged —
+ * these are summarized by the Workflow-run ingest, not imported as sub-agents —
+ * while the snapshot writer can still preserve them for the Conversation tab.
+ *
+ * Each entry is { abs, rel } where `rel` is the path relative to the session's
+ * `subagents` root (e.g. "workflows/<runId>/agent-<id>.jsonl"), so the snapshot
+ * can mirror the live nested layout exactly.
+ */
+function findSessionWorkflowSubagents(sessionJsonlPath) {
+  const dir = path.dirname(sessionJsonlPath);
+  const sessionId = path.basename(sessionJsonlPath, ".jsonl");
+  const subagentRoots = [
+    path.join(dir, sessionId, "subagents"),
+    path.join(dir, "subagents", sessionId),
+  ];
+  const result = [];
+  for (const root of subagentRoots) {
+    const workflowsDir = path.join(root, "workflows");
+    try {
+      if (!fs.existsSync(workflowsDir)) continue;
+      for (const d of fs.readdirSync(workflowsDir, { withFileTypes: true })) {
+        if (!d.isDirectory()) continue;
+        const runDir = path.join(workflowsDir, d.name);
+        for (const f of fs.readdirSync(runDir).filter((x) => x.endsWith(".jsonl"))) {
+          result.push({
+            abs: path.join(runDir, f),
+            rel: path.join("workflows", d.name, f),
+          });
+        }
+      }
+    } catch {
+      /* non-fatal */
+    }
+  }
+  return result;
+}
+
+/**
  * Generalized importer that accepts any root directory.
  *
  * Walks `rootDir` recursively, classifies every `.jsonl` as session or
@@ -1976,6 +2028,8 @@ module.exports = {
   collectJsonlFiles,
   classifyJsonl,
   findSessionSubagents,
+  findSessionWorkflowSubagents,
+  snapshotTranscript,
   importSession,
   scanAndImportSubagents,
   combineSessionTokens,

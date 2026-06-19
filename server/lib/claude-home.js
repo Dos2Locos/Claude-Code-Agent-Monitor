@@ -74,22 +74,66 @@ function getTranscriptPath(sessionId, cwd) {
 }
 
 /**
- * Infer the sub-agent JSONL file path from sessionId, cwd, and agentId.
- * Falls back to scanning all project directories if the encoded path doesn't exist.
+ * Resolve a per-agent transcript file inside a session's `subagents` directory,
+ * supporting BOTH on-disk layouts Claude Code has used for sub-agent transcripts:
+ *   - flat:   <subagents>/agent-<agentId>.jsonl
+ *             (regular sub-agents, and older Workflow-tool builds)
+ *   - nested: <subagents>/workflows/<runId>/agent-<agentId>.jsonl
+ *             (current Workflow-tool fan-out runs)
+ *
+ * The flat path is checked first, so regular sub-agents resolve exactly as
+ * before. For the nested layout: when `runId` is known the run directory is read
+ * directly; when it is unknown the nested tree is scanned and a match is
+ * returned ONLY if exactly one run contains that agent — an ambiguous agentId
+ * across multiple runs resolves to null rather than guessing.
+ *
+ * @param {string} subagentsDir absolute path to a `.../subagents` directory
+ * @param {string} agentId the agent-<agentId>.jsonl key (no prefix/suffix)
+ * @param {string|null} [runId] the workflow run id, when known
+ * @returns {string|null} absolute transcript path, or null. Never throws.
  */
-function getSubagentTranscriptPath(sessionId, cwd, agentId) {
+function resolveAgentTranscriptInDir(subagentsDir, agentId, runId = null) {
+  if (!subagentsDir) return null;
+  const flat = path.join(subagentsDir, `agent-${agentId}.jsonl`);
+  if (fs.existsSync(flat)) return flat;
+
+  const workflowsDir = path.join(subagentsDir, "workflows");
+  if (!fs.existsSync(workflowsDir)) return null;
+
+  if (runId) {
+    const nested = path.join(workflowsDir, runId, `agent-${agentId}.jsonl`);
+    return fs.existsSync(nested) ? nested : null;
+  }
+
+  // Unknown run: accept only an unambiguous single match across all runs.
+  try {
+    const matches = [];
+    for (const d of fs.readdirSync(workflowsDir, { withFileTypes: true })) {
+      if (!d.isDirectory()) continue;
+      const cand = path.join(workflowsDir, d.name, `agent-${agentId}.jsonl`);
+      if (fs.existsSync(cand)) matches.push(cand);
+      if (matches.length > 1) break;
+    }
+    return matches.length === 1 ? matches[0] : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Infer the sub-agent JSONL file path from sessionId, cwd, agentId, and
+ * (optionally) the Workflow runId. Resolves both the flat and nested
+ * Workflow-tool layouts via resolveAgentTranscriptInDir. Falls back to scanning
+ * all project directories if the encoded path doesn't exist.
+ */
+function getSubagentTranscriptPath(sessionId, cwd, agentId, runId = null) {
   if (!cwd) return null;
   const encoded = encodeCwd(cwd);
-  const candidate = path.join(
-    getProjectsDir(),
-    encoded,
-    sessionId,
-    "subagents",
-    `agent-${agentId}.jsonl`
-  );
-  if (fs.existsSync(candidate)) return candidate;
+  const subagentsDir = path.join(getProjectsDir(), encoded, sessionId, "subagents");
+  const direct = resolveAgentTranscriptInDir(subagentsDir, agentId, runId);
+  if (direct) return direct;
   // Fallback: scan all project directories
-  return findSubagentTranscriptPath(sessionId, agentId);
+  return findSubagentTranscriptPath(sessionId, agentId, runId);
 }
 
 /**
@@ -126,15 +170,17 @@ function getSnapshotTranscriptPath(sessionId) {
 
 /**
  * Path to a snapshotted subagent transcript, mirroring the live layout
- * `<snapshotDir>/<sessionId>/subagents/agent-<agentId>.jsonl`. Supports the
+ * `<snapshotDir>/<sessionId>/subagents/agent-<agentId>.jsonl` (flat) and
+ * `<snapshotDir>/<sessionId>/subagents/workflows/<runId>/agent-<agentId>.jsonl`
+ * (nested Workflow-tool runs, preserved by the snapshot writer). Supports the
  * same compaction prefix-fuzzy match as findSubagentTranscriptPath. Returns
  * the path or null.
  */
-function getSnapshotSubagentTranscriptPath(sessionId, agentId) {
+function getSnapshotSubagentTranscriptPath(sessionId, agentId, runId = null) {
   const subDir = path.join(getTranscriptSnapshotDir(), sessionId, "subagents");
   if (!fs.existsSync(subDir)) return null;
-  const exact = path.join(subDir, `agent-${agentId}.jsonl`);
-  if (fs.existsSync(exact)) return exact;
+  const hit = resolveAgentTranscriptInDir(subDir, agentId, runId);
+  if (hit) return hit;
   if (agentId.startsWith("acompact-")) {
     try {
       const match = fs
@@ -150,11 +196,12 @@ function getSnapshotSubagentTranscriptPath(sessionId, agentId) {
 
 /**
  * Find a sub-agent JSONL file path by scanning when cwd is unknown.
- * Supports exact match and prefix fuzzy match:
- * - Exact: agent-<agentId>.jsonl
- * - Fuzzy: agent-acompact-*.jsonl (for compaction type)
+ * Supports both layouts (flat + nested Workflow-tool, via
+ * resolveAgentTranscriptInDir) and a prefix fuzzy match:
+ * - Exact:  agent-<agentId>.jsonl (or workflows/<runId>/agent-<agentId>.jsonl)
+ * - Fuzzy:  agent-acompact-*.jsonl (for compaction type)
  */
-function findSubagentTranscriptPath(sessionId, agentId) {
+function findSubagentTranscriptPath(sessionId, agentId, runId = null) {
   const projectsDir = getProjectsDir();
   if (!fs.existsSync(projectsDir)) return null;
   try {
@@ -164,9 +211,9 @@ function findSubagentTranscriptPath(sessionId, agentId) {
       const subagentsDir = path.join(projectsDir, d.name, sessionId, "subagents");
       if (!fs.existsSync(subagentsDir)) continue;
 
-      // Exact match
-      const exact = path.join(subagentsDir, `agent-${agentId}.jsonl`);
-      if (fs.existsSync(exact)) return exact;
+      // Exact match (flat or nested Workflow-tool layout)
+      const hit = resolveAgentTranscriptInDir(subagentsDir, agentId, runId);
+      if (hit) return hit;
 
       // Prefix fuzzy match (compaction type: agentId starts with "acompact-")
       if (agentId.startsWith("acompact-")) {
@@ -238,6 +285,7 @@ module.exports = {
   getTranscriptSnapshotDir,
   getSettingsPath,
   getTranscriptPath,
+  resolveAgentTranscriptInDir,
   getSubagentTranscriptPath,
   getSnapshotTranscriptPath,
   getSnapshotSubagentTranscriptPath,

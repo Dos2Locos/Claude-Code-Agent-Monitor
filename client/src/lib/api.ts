@@ -96,6 +96,7 @@ export const api = {
       id: string,
       params?: {
         agent_id?: string;
+        run_id?: string;
         limit?: number;
         offset?: number;
         after?: number;
@@ -104,6 +105,7 @@ export const api = {
     ) => {
       const qs = new URLSearchParams();
       if (params?.agent_id) qs.set("agent_id", params.agent_id);
+      if (params?.run_id) qs.set("run_id", params.run_id);
       if (params?.limit) qs.set("limit", String(params.limit));
       if (params?.offset) qs.set("offset", String(params.offset));
       if (params?.after != null) qs.set("after", String(params.after));

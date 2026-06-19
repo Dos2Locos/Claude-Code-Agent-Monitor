@@ -502,6 +502,8 @@ router.get("/:id/transcripts", async (req, res) => {
 // GET /:id/transcript — Read session JSONL transcript, return structured message list
 // Query params:
 //   agent_id: file-level short ID ("main" or "ad18a79192af10ed1", "acompact-xxx")
+//   run_id: Workflow run id ("wf_...") — disambiguates a workflow inner agent's
+//           nested transcript (subagents/workflows/<run_id>/agent-<agent_id>.jsonl)
 //   limit: max messages to return (default 50, max 200)
 //   after: JSONL line number, only return messages after this line (incremental mode)
 //   before: JSONL line number, only return messages before this line (history mode)
@@ -513,6 +515,7 @@ router.get("/:id/transcript", async (req, res) => {
   }
 
   const agentId = req.query.agent_id || null;
+  const runId = req.query.run_id || null;
   const limit = Math.min(parseInt(req.query.limit) || 50, 200);
   const afterLine = req.query.after ? parseInt(req.query.after) : null;
   const beforeLine = req.query.before ? parseInt(req.query.before) : null;
@@ -525,9 +528,9 @@ router.get("/:id/transcript", async (req, res) => {
   let jsonlPath;
   if (agentId && agentId !== "main") {
     jsonlPath =
-      getSubagentTranscriptPath(req.params.id, session.cwd, agentId) ||
-      findSubagentTranscriptPath(req.params.id, agentId) ||
-      getSnapshotSubagentTranscriptPath(req.params.id, agentId);
+      getSubagentTranscriptPath(req.params.id, session.cwd, agentId, runId) ||
+      findSubagentTranscriptPath(req.params.id, agentId, runId) ||
+      getSnapshotSubagentTranscriptPath(req.params.id, agentId, runId);
   } else {
     jsonlPath =
       getTranscriptPath(req.params.id, session.cwd) ||

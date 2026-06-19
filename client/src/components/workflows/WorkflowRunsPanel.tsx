@@ -6,7 +6,10 @@
  * SessionDetail) or self-fetching (pass a `statusFilter`, e.g. the Workflows
  * page) with live `workflow_upserted` updates. Each run expands to colored,
  * clickable phase filters, a per-agent metrics table, and an expandable list of
- * per-agent results (full prompt + result, no truncation).
+ * per-agent results. The collapsed row shows a short teaser from the run
+ * journal; expanding an agent lazily fetches its full transcript (the journal
+ * only carries server-truncated previews) and renders the complete prompt and
+ * result, falling back to the teaser when the transcript is pruned/unavailable.
  * @author Son Nguyen <hoangson091104@gmail.com>
  */
 
@@ -16,7 +19,12 @@ import { useTranslation } from "react-i18next";
 import { Workflow, ChevronRight, ChevronDown, Layers, ExternalLink, Loader2 } from "lucide-react";
 import { api } from "../../lib/api";
 import { eventBus } from "../../lib/eventBus";
-import type { WorkflowRun, WorkflowProgressEntry, WSMessage } from "../../lib/types";
+import type {
+  WorkflowRun,
+  WorkflowProgressEntry,
+  WSMessage,
+  TranscriptMessage,
+} from "../../lib/types";
 import { fmt, formatMs, timeAgo, truncate } from "../../lib/format";
 
 type StatusFilter = "all" | "active" | "completed";
@@ -108,6 +116,48 @@ export function fullPreview(raw: unknown): string {
   }
 }
 
+/** Join the text blocks of one transcript message into a single string. */
+function messageText(m: TranscriptMessage): string {
+  return (m.content || [])
+    .filter((b) => b.type === "text" && b.text)
+    .map((b) => b.text as string)
+    .join("\n\n")
+    .trim();
+}
+
+/**
+ * Derive an agent's full prompt and result from its fetched transcript: the
+ * first user message carries the task prompt; the last assistant message that
+ * has text carries the returned result. Either is "" when absent (e.g. a
+ * schema-mode agent whose final turn is a tool call rather than text) — callers
+ * fall back to the journal teaser in that case.
+ */
+export function extractPromptResult(messages: TranscriptMessage[]): {
+  prompt: string;
+  result: string;
+} {
+  let prompt = "";
+  let result = "";
+  for (const m of messages || []) {
+    if (m.type === "user" && !prompt) {
+      const t = messageText(m);
+      if (t) prompt = t;
+    } else if (m.type === "assistant") {
+      const t = messageText(m);
+      if (t) result = t; // keep the last non-empty assistant text
+    }
+  }
+  return { prompt, result };
+}
+
+/** Per-agent transcript fetch state, keyed `${run_id}::${agentId}`. */
+interface AgentTranscriptState {
+  loading: boolean;
+  prompt?: string;
+  result?: string;
+  error?: boolean;
+}
+
 export function WorkflowRunsPanel({
   runs: controlledRuns,
   statusFilter,
@@ -122,6 +172,31 @@ export function WorkflowRunsPanel({
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [phaseFilter, setPhaseFilter] = useState<Record<string, string | null>>({});
   const [openResults, setOpenResults] = useState<Set<string>>(() => new Set());
+  // Full agent transcripts fetched on demand when a result row is expanded,
+  // keyed `${run_id}::${agentId}`. The run journal only carries truncated
+  // previews; the complete text lives in the per-agent transcript file.
+  const [transcripts, setTranscripts] = useState<Record<string, AgentTranscriptState>>({});
+  const inflightRef = useRef<Set<string>>(new Set());
+
+  const loadTranscript = useCallback(
+    async (sessionId: string, runId: string, agentId: string, key: string) => {
+      if (inflightRef.current.has(key)) return;
+      inflightRef.current.add(key);
+      setTranscripts((prev) => ({ ...prev, [key]: { loading: true } }));
+      try {
+        const res = await api.sessions.transcript(sessionId, {
+          agent_id: agentId,
+          run_id: runId,
+          limit: 200,
+        });
+        const { prompt, result } = extractPromptResult(res.messages || []);
+        setTranscripts((prev) => ({ ...prev, [key]: { loading: false, prompt, result } }));
+      } catch {
+        setTranscripts((prev) => ({ ...prev, [key]: { loading: false, error: true } }));
+      }
+    },
+    []
+  );
 
   const fetchRuns = useCallback(async () => {
     if (controlled) return;
@@ -372,13 +447,28 @@ export function WorkflowRunsPanel({
                     {resultRows.map((a, i) => {
                       const key = `${run.run_id}::${a.agentId || i}`;
                       const open = openResults.has(key);
+                      const ts = transcripts[key];
+                      const hasFull = !!ts && !ts.loading && !ts.error;
+                      const fullPrompt =
+                        hasFull && ts.prompt
+                          ? ts.prompt
+                          : a.promptPreview
+                            ? String(a.promptPreview)
+                            : "";
+                      const fullResult =
+                        hasFull && ts.result ? ts.result : fullPreview(a.resultPreview);
                       return (
                         <div
                           key={key}
                           className="rounded border border-gray-800/70 bg-gray-900/30 overflow-hidden"
                         >
                           <button
-                            onClick={() => toggleResult(key)}
+                            onClick={() => {
+                              if (!open && a.agentId) {
+                                loadTranscript(run.session_id, run.run_id, a.agentId, key);
+                              }
+                              toggleResult(key);
+                            }}
                             className="w-full flex items-center gap-2 px-2 py-1.5 text-left hover:bg-gray-800/40 transition-colors"
                             aria-expanded={open}
                           >
@@ -412,14 +502,20 @@ export function WorkflowRunsPanel({
                                 </span>
                                 <span>{t("runs.tools", { count: a.toolCalls || 0 })}</span>
                                 {a.durationMs != null && <span>{formatMs(a.durationMs)}</span>}
+                                {ts?.loading && (
+                                  <span className="flex items-center gap-1 text-violet-400">
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                    {t("runs.loadingFull")}
+                                  </span>
+                                )}
                               </div>
-                              {a.promptPreview && (
+                              {fullPrompt && (
                                 <div>
                                   <div className="text-[10px] uppercase tracking-wider text-gray-600 mb-0.5">
                                     {t("runs.promptLabel")}
                                   </div>
                                   <pre className="text-[11px] text-gray-400 whitespace-pre-wrap break-words bg-black/30 rounded p-2 max-h-48 overflow-auto">
-                                    {String(a.promptPreview)}
+                                    {fullPrompt}
                                   </pre>
                                 </div>
                               )}
@@ -428,7 +524,7 @@ export function WorkflowRunsPanel({
                                   {t("runs.resultLabel")}
                                 </div>
                                 <pre className="text-[11px] text-gray-300 whitespace-pre-wrap break-words bg-black/30 rounded p-2 max-h-96 overflow-auto">
-                                  {fullPreview(a.resultPreview)}
+                                  {fullResult}
                                 </pre>
                               </div>
                             </div>
