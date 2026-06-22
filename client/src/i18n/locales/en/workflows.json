@@ -22,6 +22,7 @@
     "resultsLabel": "Results",
     "promptLabel": "Prompt",
     "resultLabel": "Result",
+    "loadingFull": "Loading full text…",
     "tokens": "tokens",
     "agents_one": "{{count}} agent",
     "agents_other": "{{count}} agents",

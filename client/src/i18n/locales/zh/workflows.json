@@ -22,6 +22,7 @@
     "resultsLabel": "结果",
     "promptLabel": "提示词",
     "resultLabel": "结果",
+    "loadingFull": "正在加载完整内容…",
     "tokens": "token",
     "agents_one": "{{count}} 个 Agent",
     "agents_other": "{{count}} 个 Agent",
