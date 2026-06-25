@@ -4,6 +4,15 @@
  */
 
 const fs = require("fs");
+const {
+  bucketKey,
+  emptyBucket,
+  extractUsageFields,
+  normalizeSpeed,
+  normalizeGeo,
+  normalizeTier,
+  accumulateBucket,
+} = require("./token-usage");
 
 const MAX_CACHE_ENTRIES = 200;
 
@@ -84,6 +93,8 @@ class TranscriptCache {
             thinkingBlockCount: merged.thinkingBlockCount || 0,
             usageExtras: hasUsageExtras ? merged.usageExtras : null,
             latestModel: merged.latestModel || null,
+            customTitle: merged.customTitle || null,
+            aiTitle: merged.aiTitle || null,
           };
           if (
             !result.tokensByModel &&
@@ -92,7 +103,9 @@ class TranscriptCache {
             !result.turnDurations &&
             !result.thinkingBlockCount &&
             !result.usageExtras &&
-            !result.latestModel
+            !result.latestModel &&
+            !result.customTitle &&
+            !result.aiTitle
           ) {
             this._set(key, {
               mtimeMs: stat.mtimeMs,
@@ -272,6 +285,13 @@ class TranscriptCache {
       // the user's *current* model — used downstream to keep session.model in
       // sync when the user invokes /model mid-session.
       latestModel: null,
+      // Track the latest human-readable session title. Two sources, both
+      // append-only metadata lines: `custom-title` (explicit /rename, claude
+      // -n, picker Ctrl+R) and `ai-title` (auto-generated / plan-accept).
+      // Last value wins. Used downstream to keep session.name in sync in real
+      // time — custom titles take precedence over ai titles.
+      customTitle: null,
+      aiTitle: null,
     };
   }
 
@@ -281,6 +301,21 @@ class TranscriptCache {
     try {
       entry = JSON.parse(line);
     } catch {
+      return;
+    }
+
+    // Session title metadata lines — sparse, no usage payload. Capture the
+    // latest value of each kind (append-only → last wins) and bail early.
+    if (entry.type === "custom-title") {
+      if (typeof entry.customTitle === "string" && entry.customTitle.trim()) {
+        state.customTitle = entry.customTitle;
+      }
+      return;
+    }
+    if (entry.type === "ai-title") {
+      if (typeof entry.aiTitle === "string" && entry.aiTitle.trim()) {
+        state.aiTitle = entry.aiTitle;
+      }
       return;
     }
 
@@ -338,13 +373,17 @@ class TranscriptCache {
     const model = msg.model;
     if (!model || model === "<synthetic>" || !msg.usage) return;
     state.latestModel = model;
-    if (!state.tokensByModel[model]) {
-      state.tokensByModel[model] = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+    // Bucket tokens by the pricing dimensions (speed / geo / tier) so cost can
+    // apply fast-mode, data-residency, and Batch modifiers per bucket. The value
+    // carries those dimensions so the DB writer can key the row correctly.
+    const speed = normalizeSpeed(msg.usage);
+    const geo = normalizeGeo(msg.usage);
+    const tier = normalizeTier(msg.usage);
+    const key = bucketKey(model, speed, geo, tier);
+    if (!state.tokensByModel[key]) {
+      state.tokensByModel[key] = emptyBucket(model, speed, geo, tier);
     }
-    state.tokensByModel[model].input += msg.usage.input_tokens || 0;
-    state.tokensByModel[model].output += msg.usage.output_tokens || 0;
-    state.tokensByModel[model].cacheRead += msg.usage.cache_read_input_tokens || 0;
-    state.tokensByModel[model].cacheWrite += msg.usage.cache_creation_input_tokens || 0;
+    accumulateBucket(state.tokensByModel[key], extractUsageFields(msg.usage));
 
     if (msg.usage.service_tier) state.usageExtras.service_tiers.add(msg.usage.service_tier);
     if (msg.usage.speed) state.usageExtras.speeds.add(msg.usage.speed);
@@ -375,7 +414,9 @@ class TranscriptCache {
       !hasTurnDurations &&
       !state.thinkingBlockCount &&
       !hasUsageExtras &&
-      !state.latestModel
+      !state.latestModel &&
+      !state.customTitle &&
+      !state.aiTitle
     ) {
       return null;
     }
@@ -402,6 +443,8 @@ class TranscriptCache {
       thinkingBlockCount: state.thinkingBlockCount,
       usageExtras: serializedExtras,
       latestModel: state.latestModel,
+      customTitle: state.customTitle,
+      aiTitle: state.aiTitle,
     };
   }
 
@@ -433,14 +476,11 @@ class TranscriptCache {
       ? this._cloneTokens(cached.result.tokensByModel)
       : {};
     if (incremental && incremental.tokensByModel) {
-      for (const [model, tokens] of Object.entries(incremental.tokensByModel)) {
-        if (!tokensByModel[model]) {
-          tokensByModel[model] = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+      for (const [key, tokens] of Object.entries(incremental.tokensByModel)) {
+        if (!tokensByModel[key]) {
+          tokensByModel[key] = emptyBucket(tokens.model, tokens.speed, tokens.geo, tokens.tier);
         }
-        tokensByModel[model].input += tokens.input;
-        tokensByModel[model].output += tokens.output;
-        tokensByModel[model].cacheRead += tokens.cacheRead;
-        tokensByModel[model].cacheWrite += tokens.cacheWrite;
+        accumulateBucket(tokensByModel[key], tokens);
       }
     }
 
@@ -503,6 +543,12 @@ class TranscriptCache {
     const latestModel =
       (incremental && incremental.latestModel) || cached.result?.latestModel || null;
 
+    // Same append-only logic for the session titles: the newest title line in
+    // the incremental chunk wins, else keep what was cached.
+    const customTitle =
+      (incremental && incremental.customTitle) || cached.result?.customTitle || null;
+    const aiTitle = (incremental && incremental.aiTitle) || cached.result?.aiTitle || null;
+
     return {
       tokensByModel,
       compaction,
@@ -511,6 +557,8 @@ class TranscriptCache {
       thinkingBlockCount,
       usageExtras,
       latestModel,
+      customTitle,
+      aiTitle,
     };
   }
 

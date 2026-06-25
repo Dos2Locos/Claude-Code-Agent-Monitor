@@ -129,23 +129,51 @@ export interface ModelPricing {
   output_per_mtok: number;
   cache_read_per_mtok: number;
   cache_write_per_mtok: number;
+  cache_write_1h_per_mtok: number;
+  fast_input_per_mtok: number;
+  fast_output_per_mtok: number;
   updated_at: string;
 }
 
 export interface CostBreakdown {
   model: string;
+  speed?: string;
+  inference_geo?: string;
+  service_tier?: string;
   input_tokens: number;
   output_tokens: number;
   cache_read_tokens: number;
   cache_write_tokens: number;
+  cache_write_1h_tokens?: number;
+  web_search_requests?: number;
+  web_fetch_requests?: number;
+  code_execution_requests?: number;
   cost: number;
   matched_rule: string | null;
+}
+
+export interface CostFeatureCosts {
+  web_search_cost: number;
+  web_fetch_cost: number;
+  code_execution_cost: number;
+  code_execution_hours_estimated: number;
+  code_execution_free_hours: number;
+}
+
+export interface UnpricedModel {
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
 }
 
 export interface CostResult {
   total_cost: number;
   breakdown: CostBreakdown[];
   daily_costs: Array<{ date: string; cost: number }>;
+  feature_costs?: CostFeatureCosts;
+  unpriced_models?: UnpricedModel[];
 }
 
 export interface ImportProgressMessage {
@@ -166,7 +194,7 @@ export interface UpdateStatusPayload {
   update_available: boolean;
   repo_root?: string;
   remote_ref?: string | null;
-  /** Remote name we compared against — "upstream" if configured (fork
+  /** Remote name we compared against - "upstream" if configured (fork
    * convention), else "origin", else whatever single remote is set up. */
   canonical_remote?: string | null;
   /** Local branch HEAD points at. null on detached HEAD. */
@@ -175,7 +203,7 @@ export interface UpdateStatusPayload {
    * no upstream is configured for the current branch. */
   tracking_upstream?: string | null;
   /** True when the local branch's tracked upstream is exactly remote_ref
-   * — i.e. a plain `git pull --ff-only` will do the right thing. */
+   * - i.e. a plain `git pull --ff-only` will do the right thing. */
   tracks_canonical?: boolean;
   /** Categorical hint for the UI. Discriminated so callers can branch on
    * shape (e.g. show "Restart after running" only when the command
@@ -267,6 +295,135 @@ export interface BudgetsUpdatedPayload {
   budgets: Budget[];
 }
 
+// ── Alerting ──
+
+export type AlertRuleType = "event_pattern" | "inactivity" | "status_duration" | "token_threshold";
+
+export interface AlertRuleConfig {
+  event_type?: string;
+  tool_name?: string;
+  summary_contains?: string;
+  count?: number;
+  window_minutes?: number;
+  minutes?: number;
+  status?: "working" | "waiting";
+  total_tokens?: number;
+}
+
+export interface AlertRule {
+  id: string;
+  name: string;
+  rule_type: AlertRuleType;
+  config: AlertRuleConfig;
+  enabled: boolean;
+  cooldown_seconds: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AlertEvent {
+  id: number;
+  rule_id: string;
+  rule_name: string;
+  rule_type: AlertRuleType;
+  session_id: string | null;
+  agent_id: string | null;
+  message: string;
+  details: string | null;
+  triggered_at: string;
+  acknowledged_at: string | null;
+}
+
+// ── Webhooks ──
+
+export type WebhookType =
+  | "slack"
+  | "discord"
+  | "teams"
+  | "google_chat"
+  | "mattermost"
+  | "rocketchat"
+  | "telegram"
+  | "pagerduty"
+  | "opsgenie"
+  | "splunk_oncall"
+  | "zapier"
+  | "make"
+  | "n8n"
+  | "pipedream"
+  | "generic";
+
+export interface WebhookProviderField {
+  key: string;
+  label: string;
+  secret: boolean;
+  required: boolean;
+  type: "string" | "enum";
+  options: string[] | null;
+  default: string | null;
+}
+
+export interface WebhookProvider {
+  type: WebhookType;
+  label: string;
+  family: "chat" | "api" | "generic";
+  url_required: boolean;
+  has_default_url: boolean;
+  derives_url: boolean;
+  allow_http: boolean;
+  url_hint: string | null;
+  supports_secret: boolean;
+  supports_headers: boolean;
+  fields: WebhookProviderField[];
+}
+
+export interface WebhookDeliverySummary {
+  status: "success" | "failed";
+  status_code: number | null;
+  attempts: number;
+  error: string | null;
+  created_at: string;
+}
+
+export interface WebhookTarget {
+  id: string;
+  name: string;
+  type: WebhookType;
+  enabled: boolean;
+  /** Masked: host + last 4 chars. The full URL is never returned by the API. */
+  url_preview: string;
+  has_secret: boolean;
+  /** Generic targets only; values are masked ("••••"). */
+  headers: Record<string, string> | null;
+  /** Provider config (Telegram chat_id, PagerDuty routing_key, …); secret values masked. */
+  config: Record<string, string> | null;
+  /** Rule ids this target is scoped to; null = all rules. */
+  rule_ids: string[] | null;
+  created_at: string;
+  updated_at: string;
+  last_delivery: WebhookDeliverySummary | null;
+}
+
+export interface WebhookDelivery {
+  id: number;
+  target_id: string;
+  target_name: string;
+  target_type: WebhookType;
+  alert_id: number | null;
+  status: "success" | "failed";
+  status_code: number | null;
+  attempts: number;
+  error: string | null;
+  created_at: string;
+}
+
+export interface WebhookTestResult {
+  ok: boolean;
+  status: number | null;
+  attempts: number;
+  error: string | null;
+}
+
 export interface WSMessage {
   type:
     | "session_created"
@@ -281,7 +438,10 @@ export interface WSMessage {
     | "run_input_ack"
     | "cc_config_changed"
     | "budget_alert"
-    | "budgets_updated";
+    | "budgets_updated"
+    | "alert_triggered"
+    | "alert_updated"
+    | "workflow_upserted";
   data:
     | Session
     | Agent
@@ -293,7 +453,9 @@ export interface WSMessage {
     | RunInputAckPayload
     | CcConfigChangedPayload
     | BudgetAlertPayload
-    | BudgetsUpdatedPayload;
+    | BudgetsUpdatedPayload
+    | AlertEvent
+    | WorkflowRun;
   timestamp: string;
 }
 
@@ -486,6 +648,71 @@ export interface SessionDrillIn {
   events: DashboardEvent[];
 }
 
+// ── Workflow-tool runs (issue #167) ──────────────────────────────────────────
+// Fleets of inner sub-agents spawned by the Claude Code "Workflow" tool,
+// ingested from the on-disk run journal. Distinct from WorkflowData above
+// (which is events-derived analytics).
+export interface WorkflowPhase {
+  title?: string;
+  detail?: string;
+  [key: string]: unknown;
+}
+
+export interface WorkflowProgressEntry {
+  /** "workflow_agent" (a real inner agent) or "workflow_phase" (a phase marker). */
+  type?: string;
+  agentId?: string;
+  agentType?: string | null;
+  model?: string | null;
+  state?: string | null;
+  label?: string | null;
+  phaseTitle?: string | null;
+  startedAt?: string | number | null;
+  tokens?: number;
+  toolCalls?: number;
+  durationMs?: number | null;
+  lastToolName?: string | null;
+  promptPreview?: string | null;
+  resultPreview?: string | null;
+  [key: string]: unknown;
+}
+
+export interface WorkflowRun {
+  run_id: string;
+  session_id: string;
+  task_id: string | null;
+  name: string | null;
+  status: string;
+  default_model: string | null;
+  started_at: string | null;
+  ended_at: string | null;
+  duration_ms: number | null;
+  agent_count: number;
+  total_tokens: number;
+  total_tool_calls: number;
+  phases: WorkflowPhase[];
+  progress: WorkflowProgressEntry[];
+  script_path: string | null;
+  journal_path: string | null;
+  source: "journal" | "live";
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkflowRunsResponse {
+  runs: WorkflowRun[];
+  total: number;
+  counts: Record<string, number>;
+  limit: number;
+  offset: number;
+}
+
+export interface WorkflowRunDetail {
+  workflow: WorkflowRun;
+  agents: Agent[];
+  events: DashboardEvent[];
+}
+
 export const STATUS_CONFIG: Record<
   EffectiveAgentStatus,
   { labelKey: string; color: string; bg: string; dot: string }
@@ -529,7 +756,7 @@ export interface TranscriptContent {
 }
 
 export interface TranscriptMessage {
-  type: "user" | "assistant";
+  type: "user" | "assistant" | "session_event";
   timestamp: string | null;
   content: TranscriptContent[];
   model?: string;
@@ -539,6 +766,11 @@ export interface TranscriptMessage {
     cache_read_input_tokens?: number;
     cache_creation_input_tokens?: number;
   };
+  /** For type === "session_event": the TUI action this marker represents.
+   *  "rename" is a /rename, `claude -n`, or picker Ctrl+R title change. */
+  event_kind?: "rename";
+  /** For type === "session_event": the new session title. */
+  title?: string;
 }
 
 export interface TranscriptResult {

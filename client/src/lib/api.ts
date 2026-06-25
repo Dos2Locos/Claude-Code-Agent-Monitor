@@ -6,6 +6,8 @@
 
 import type {
   Agent,
+  AlertEvent,
+  AlertRule,
   Analytics,
   Budget,
   BudgetListResponse,
@@ -20,7 +22,15 @@ import type {
   TranscriptListResult,
   TranscriptResult,
   UpdateStatusPayload,
+  WebhookDelivery,
+  WebhookProvider,
+  WebhookTarget,
+  WebhookTestResult,
+  WebhookType,
   WorkflowData,
+  WorkflowRun,
+  WorkflowRunsResponse,
+  WorkflowRunDetail,
 } from "./types";
 
 const BASE = "/api";
@@ -76,9 +86,12 @@ export const api = {
       );
     },
     get: (id: string) =>
-      request<{ session: Session; agents: Agent[]; events: DashboardEvent[] }>(
-        `/sessions/${encodeURIComponent(id)}`
-      ),
+      request<{
+        session: Session;
+        agents: Agent[];
+        events: DashboardEvent[];
+        workflows: WorkflowRun[];
+      }>(`/sessions/${encodeURIComponent(id)}`),
     stats: (id: string) => request<SessionStats>(`/sessions/${encodeURIComponent(id)}/stats`),
     transcripts: (id: string) =>
       request<TranscriptListResult>(`/sessions/${encodeURIComponent(id)}/transcripts`),
@@ -86,6 +99,7 @@ export const api = {
       id: string,
       params?: {
         agent_id?: string;
+        run_id?: string;
         limit?: number;
         offset?: number;
         after?: number;
@@ -94,6 +108,7 @@ export const api = {
     ) => {
       const qs = new URLSearchParams();
       if (params?.agent_id) qs.set("agent_id", params.agent_id);
+      if (params?.run_id) qs.set("run_id", params.run_id);
       if (params?.limit) qs.set("limit", String(params.limit));
       if (params?.offset) qs.set("offset", String(params.offset));
       if (params?.after != null) qs.set("after", String(params.after));
@@ -239,6 +254,18 @@ export const api = {
       request<WorkflowData>(`/workflows${status && status !== "all" ? `?status=${status}` : ""}`),
     session: (id: string) =>
       request<SessionDrillIn>(`/workflows/session/${encodeURIComponent(id)}`),
+    // Workflow-tool runs (issue #167) - fleets ingested from on-disk journals.
+    runs: (params?: { status?: string; session_id?: string; limit?: number; offset?: number }) => {
+      const qs = new URLSearchParams();
+      if (params?.status && params.status !== "all") qs.set("status", params.status);
+      if (params?.session_id) qs.set("session_id", params.session_id);
+      if (params?.limit != null) qs.set("limit", String(params.limit));
+      if (params?.offset != null) qs.set("offset", String(params.offset));
+      const q = qs.toString();
+      return request<WorkflowRunsResponse>(`/workflows/runs${q ? `?${q}` : ""}`);
+    },
+    run: (runId: string) =>
+      request<WorkflowRunDetail>(`/workflows/runs/${encodeURIComponent(runId)}`),
   },
 
   pricing: {
@@ -364,6 +391,98 @@ export const api = {
         body: JSON.stringify(data),
       }),
     remove: (id: number) => request<{ ok: boolean }>(`/budgets/${id}`, { method: "DELETE" }),
+  },
+
+  alerts: {
+    list: (params?: { unacked?: boolean; limit?: number; offset?: number }) => {
+      const qs = new URLSearchParams();
+      if (params?.unacked) qs.set("unacked", "true");
+      if (params?.limit) qs.set("limit", String(params.limit));
+      if (params?.offset) qs.set("offset", String(params.offset));
+      const q = qs.toString();
+      return request<{
+        alerts: AlertEvent[];
+        total: number;
+        unacked: number;
+        limit: number;
+        offset: number;
+      }>(`/alerts${q ? `?${q}` : ""}`);
+    },
+    ack: (id: number) => request<{ alert: AlertEvent }>(`/alerts/${id}/ack`, { method: "POST" }),
+    ackAll: () =>
+      request<{ ok: true; acknowledged: number }>("/alerts/ack-all", { method: "POST" }),
+    rules: {
+      list: () => request<{ rules: AlertRule[] }>("/alerts/rules"),
+      create: (rule: {
+        name: string;
+        rule_type: AlertRule["rule_type"];
+        config: AlertRule["config"];
+        enabled?: boolean;
+        cooldown_seconds?: number;
+      }) =>
+        request<{ rule: AlertRule }>("/alerts/rules", {
+          method: "POST",
+          body: JSON.stringify(rule),
+        }),
+      update: (
+        id: string,
+        patch: Partial<Pick<AlertRule, "name" | "config" | "enabled" | "cooldown_seconds">>
+      ) =>
+        request<{ rule: AlertRule }>(`/alerts/rules/${encodeURIComponent(id)}`, {
+          method: "PATCH",
+          body: JSON.stringify(patch),
+        }),
+      remove: (id: string) =>
+        request<{ ok: true }>(`/alerts/rules/${encodeURIComponent(id)}`, { method: "DELETE" }),
+    },
+  },
+
+  webhooks: {
+    list: () => request<{ targets: WebhookTarget[] }>("/webhooks"),
+    providers: () => request<{ providers: WebhookProvider[] }>("/webhooks/providers"),
+    create: (target: {
+      name: string;
+      type: WebhookType;
+      url?: string;
+      enabled?: boolean;
+      secret?: string;
+      headers?: Record<string, string>;
+      config?: Record<string, string>;
+      rule_ids?: string[];
+    }) =>
+      request<{ target: WebhookTarget }>("/webhooks", {
+        method: "POST",
+        body: JSON.stringify(target),
+      }),
+    update: (
+      id: string,
+      patch: {
+        name?: string;
+        url?: string;
+        enabled?: boolean;
+        secret?: string | null;
+        headers?: Record<string, string>;
+        config?: Record<string, string>;
+        rule_ids?: string[];
+      }
+    ) =>
+      request<{ target: WebhookTarget }>(`/webhooks/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify(patch),
+      }),
+    remove: (id: string) =>
+      request<{ ok: true }>(`/webhooks/${encodeURIComponent(id)}`, { method: "DELETE" }),
+    test: (id: string) =>
+      request<WebhookTestResult>(`/webhooks/${encodeURIComponent(id)}/test`, { method: "POST" }),
+    deliveries: (id: string, params?: { limit?: number; offset?: number }) => {
+      const qs = new URLSearchParams();
+      if (params?.limit) qs.set("limit", String(params.limit));
+      if (params?.offset) qs.set("offset", String(params.offset));
+      const q = qs.toString();
+      return request<{ deliveries: WebhookDelivery[]; limit: number; offset: number }>(
+        `/webhooks/${encodeURIComponent(id)}/deliveries${q ? `?${q}` : ""}`
+      );
+    },
   },
 };
 
@@ -645,7 +764,7 @@ export interface RunListResponse {
 }
 
 /**
- * A row from the persistent `dashboard_runs` sqlite table — every run ever
+ * A row from the persistent `dashboard_runs` sqlite table - every run ever
  * spawned via /api/run, including completed / errored / killed ones long
  * after the in-memory handle has been reaped.
  */
@@ -692,10 +811,10 @@ export const RUN_EFFORT_CHOICES: EffortChoice[] = [
   { id: "medium", label: "Medium", hint: "Balanced" },
   { id: "high", label: "High", hint: "More reasoning, slower" },
   { id: "xhigh", label: "Extra-high", hint: "Deep reasoning" },
-  { id: "max", label: "Max", hint: "All-out — slowest, most tokens" },
+  { id: "max", label: "Max", hint: "All-out - slowest, most tokens" },
 ];
 
-// Curated model list. "" means "inherit from settings.json" — no --model flag.
+// Curated model list. "" means "inherit from settings.json" - no --model flag.
 export const RUN_MODEL_CHOICES: ModelChoice[] = [
   { id: "", label: "Inherit from settings", hint: "Use whatever your settings.json model is" },
   {

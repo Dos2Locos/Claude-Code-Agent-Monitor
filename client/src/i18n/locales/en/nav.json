@@ -8,6 +8,7 @@
   "analytics": "Analytics",
   "budgets": "Budgets",
   "workflows": "Workflows",
+  "alerts": "Alerts",
   "ccConfig": "Claude Config",
   "run": "Run Claude",
   "settings": "Settings",

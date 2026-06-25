@@ -14,6 +14,15 @@
 const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
+const {
+  bucketKey,
+  emptyBucket,
+  extractUsageFields,
+  normalizeSpeed,
+  normalizeGeo,
+  normalizeTier,
+  accumulateBucket,
+} = require("../server/lib/token-usage");
 
 const {
   getClaudeHome,
@@ -54,6 +63,16 @@ function snapshotTranscript(sourceJsonlPath, sessionId) {
       const destSub = path.join(snapDir, sessionId, "subagents", path.basename(subPath));
       if (path.resolve(destSub) === path.resolve(subPath)) continue;
       copyIfNewer(subPath, destSub);
+    }
+
+    // Workflow-tool inner-agent transcripts live nested at
+    // `<sessionId>/subagents/workflows/<runId>/agent-*.jsonl`. Preserve the
+    // `workflows/<runId>/` subpath so the read route resolves the snapshot the
+    // same way it resolves the live nested file (see getSnapshotSubagentTranscriptPath).
+    for (const sub of findSessionWorkflowSubagents(sourceJsonlPath)) {
+      const destSub = path.join(snapDir, sessionId, "subagents", sub.rel);
+      if (path.resolve(destSub) === path.resolve(sub.abs)) continue;
+      copyIfNewer(sub.abs, destSub);
     }
   } catch {
     /* non-fatal: metadata import already succeeded */
@@ -114,6 +133,11 @@ async function parseSessionFile(filePath) {
   let thinkingBlockCount = 0;
   const toolResultErrors = [];
   const usageExtras = { service_tiers: new Set(), speeds: new Set(), inference_geos: new Set() };
+  // Human-readable session title: custom-title (explicit /rename, claude -n)
+  // takes precedence over ai-title (auto-generated). Both are append-only
+  // metadata lines, so the last value seen wins.
+  let customTitle = null;
+  let aiTitle = null;
 
   for await (const line of rl) {
     if (!line.trim()) continue;
@@ -121,6 +145,15 @@ async function parseSessionFile(filePath) {
     try {
       entry = JSON.parse(line);
     } catch {
+      continue;
+    }
+
+    if (entry.type === "custom-title" && typeof entry.customTitle === "string") {
+      if (entry.customTitle.trim()) customTitle = entry.customTitle.trim();
+      continue;
+    }
+    if (entry.type === "ai-title" && typeof entry.aiTitle === "string") {
+      if (entry.aiTitle.trim()) aiTitle = entry.aiTitle.trim();
       continue;
     }
 
@@ -210,13 +243,21 @@ async function parseSessionFile(filePath) {
       if (!model && msgModel && msgModel !== "<synthetic>") model = msgModel;
       if (msgModel && msgModel !== "<synthetic>" && msg.usage) {
         const usage = msg.usage;
-        if (tokensByModel[msgModel] === undefined) {
-          tokensByModel[msgModel] = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+        const key = bucketKey(
+          msgModel,
+          normalizeSpeed(usage),
+          normalizeGeo(usage),
+          normalizeTier(usage)
+        );
+        if (tokensByModel[key] === undefined) {
+          tokensByModel[key] = emptyBucket(
+            msgModel,
+            normalizeSpeed(usage),
+            normalizeGeo(usage),
+            normalizeTier(usage)
+          );
         }
-        tokensByModel[msgModel].input += usage.input_tokens || 0;
-        tokensByModel[msgModel].output += usage.output_tokens || 0;
-        tokensByModel[msgModel].cacheRead += usage.cache_read_input_tokens || 0;
-        tokensByModel[msgModel].cacheWrite += usage.cache_creation_input_tokens || 0;
+        accumulateBucket(tokensByModel[key], extractUsageFields(usage));
       }
       if (msg.usage) {
         if (msg.usage.service_tier) usageExtras.service_tiers.add(msg.usage.service_tier);
@@ -244,9 +285,13 @@ async function parseSessionFile(filePath) {
   if (!firstTimestamp) return null;
 
   const projectName = cwd ? path.basename(cwd) : slug || `Session ${sessionId.slice(0, 8)}`;
-  const sessionName = slug
+  // Prefer the real session title (custom > ai) when the transcript carries
+  // one; otherwise fall back to a cwd/slug-derived label. The hook ingestor
+  // applies the same precedence live, so imported and active names agree.
+  const fallbackName = slug
     ? `${projectName} (${slug})`
     : `${projectName} - ${sessionId.slice(0, 8)}`;
+  const sessionName = customTitle || aiTitle || fallbackName;
 
   // Check if the JSONL file was recently modified — indicates a possibly-active session
   let fileModifiedAt = null;
@@ -260,6 +305,8 @@ async function parseSessionFile(filePath) {
   return {
     sessionId,
     name: sessionName,
+    customTitle,
+    aiTitle,
     cwd,
     model,
     version,
@@ -363,13 +410,22 @@ async function parseSubagentFile(filePath) {
       const msgModel = msg.model || null;
       if (!model && msgModel && msgModel !== "<synthetic>") model = msgModel;
       if (msgModel && msgModel !== "<synthetic>" && msg.usage) {
-        if (!tokensByModel[msgModel]) {
-          tokensByModel[msgModel] = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+        const usage = msg.usage;
+        const key = bucketKey(
+          msgModel,
+          normalizeSpeed(usage),
+          normalizeGeo(usage),
+          normalizeTier(usage)
+        );
+        if (!tokensByModel[key]) {
+          tokensByModel[key] = emptyBucket(
+            msgModel,
+            normalizeSpeed(usage),
+            normalizeGeo(usage),
+            normalizeTier(usage)
+          );
         }
-        tokensByModel[msgModel].input += msg.usage.input_tokens || 0;
-        tokensByModel[msgModel].output += msg.usage.output_tokens || 0;
-        tokensByModel[msgModel].cacheRead += msg.usage.cache_read_input_tokens || 0;
-        tokensByModel[msgModel].cacheWrite += msg.usage.cache_creation_input_tokens || 0;
+        accumulateBucket(tokensByModel[key], extractUsageFields(usage));
       }
       const content = msg.content || [];
       if (Array.isArray(content)) {
@@ -476,7 +532,7 @@ function importCompactions(dbModule, sessionId, mainAgentId, compactions) {
       compactId
     );
 
-    const summary = `Context compacted — conversation history compressed (#${i + 1})`;
+    const summary = `Context compacted - conversation history compressed (#${i + 1})`;
     insertEvent.run(
       sessionId,
       compactId,
@@ -656,14 +712,11 @@ function combineSessionTokens(session) {
   const combined = {};
   const merge = (src) => {
     if (!src) return;
-    for (const [model, tok] of Object.entries(src)) {
-      if (!combined[model]) {
-        combined[model] = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+    for (const [key, tok] of Object.entries(src)) {
+      if (!combined[key]) {
+        combined[key] = emptyBucket(tok.model, tok.speed, tok.geo, tok.tier);
       }
-      combined[model].input += tok.input || 0;
-      combined[model].output += tok.output || 0;
-      combined[model].cacheRead += tok.cacheRead || 0;
-      combined[model].cacheWrite += tok.cacheWrite || 0;
+      accumulateBucket(combined[key], tok);
     }
   };
   merge(session.tokensByModel);
@@ -681,20 +734,30 @@ function combineSessionTokens(session) {
 function writeSessionTokens(dbModule, sessionId, tokensByModel) {
   const { stmts } = dbModule;
   let written = 0;
-  for (const [tokenModel, tokens] of Object.entries(tokensByModel || {})) {
+  for (const tokens of Object.values(tokensByModel || {})) {
     if (
       (tokens.input || 0) > 0 ||
       (tokens.output || 0) > 0 ||
       (tokens.cacheRead || 0) > 0 ||
-      (tokens.cacheWrite || 0) > 0
+      (tokens.cacheWrite || 0) > 0 ||
+      (tokens.webSearch || 0) > 0 ||
+      (tokens.webFetch || 0) > 0 ||
+      (tokens.codeExec || 0) > 0
     ) {
       stmts.replaceTokenUsage.run(
         sessionId,
-        tokenModel,
+        tokens.model,
+        tokens.speed,
+        tokens.geo,
+        tokens.tier,
         tokens.input || 0,
         tokens.output || 0,
         tokens.cacheRead || 0,
-        tokens.cacheWrite || 0
+        tokens.cacheWrite || 0,
+        tokens.cacheWrite1h || 0,
+        tokens.webSearch || 0,
+        tokens.webFetch || 0,
+        tokens.codeExec || 0
       );
       written++;
     }
@@ -899,7 +962,7 @@ function importSession(dbModule, session) {
           mainAgentId,
           "Stop",
           null,
-          `${session.name} — response`,
+          `${session.name} - response`,
           importedData,
           ts
         );
@@ -1037,6 +1100,25 @@ function importSession(dbModule, session) {
       stmts.updateSession.run(null, null, null, JSON.stringify(meta), session.sessionId);
       backfilled = true;
     }
+
+    // Backfill the session name from the transcript title when the stored name
+    // is still an auto/placeholder label. Earlier imports named sessions after
+    // their cwd folder; the real title (custom > ai) is more useful. Only
+    // overwrite auto labels so a name the user picked is preserved.
+    const transcriptTitle = session.customTitle || session.aiTitle || null;
+    if (transcriptTitle) {
+      const base = session.cwd ? path.basename(session.cwd) : null;
+      const stored = existing.name || "";
+      const isAuto =
+        !stored.trim() ||
+        stored === `Session ${session.sessionId.slice(0, 8)}` ||
+        (base &&
+          (stored === base || stored.startsWith(`${base} - `) || stored.startsWith(`${base} (`)));
+      if (isAuto && stored !== transcriptTitle) {
+        stmts.updateSession.run(transcriptTitle, null, null, null, session.sessionId);
+        backfilled = true;
+      }
+    }
     if (
       session.endedAt &&
       (!existing.ended_at || session.endedAt > existing.ended_at) &&
@@ -1115,7 +1197,7 @@ function importSession(dbModule, session) {
   );
 
   const mainAgentId = `${session.sessionId}-main`;
-  const agentLabel = `Main Agent — ${session.name}`;
+  const agentLabel = `Main Agent - ${session.name}`;
   stmts.insertAgent.run(
     mainAgentId,
     session.sessionId,
@@ -1168,7 +1250,7 @@ function importSession(dbModule, session) {
         mainAgentId,
         "Stop",
         null,
-        `${session.name} — response`,
+        `${session.name} - response`,
         importedData,
         ts
       );
@@ -1602,7 +1684,7 @@ if (require.main === module) {
               0
             );
             console.log(
-              `  ${session.sessionId.slice(0, 12)}... | ${session.name.slice(0, 40).padEnd(40)} | msgs: ${session.userMessages}/${session.assistantMessages} | teams: ${session.teams.length} | models: ${Object.keys(session.tokensByModel).join(",")} | tokens: ${totalTok}`
+              `  ${session.sessionId.slice(0, 12)}... | ${session.name.slice(0, 40).padEnd(40)} | msgs: ${session.userMessages}/${session.assistantMessages} | teams: ${session.teams.length} | models: ${[...new Set(Object.values(session.tokensByModel).map((t) => t.model))].join(",")} | tokens: ${totalTok}`
             );
           } catch (err) {
             console.error(`  ERROR ${file}: ${err.message}`);
@@ -1723,6 +1805,48 @@ function findSessionSubagents(sessionJsonlPath) {
       if (!fs.existsSync(c)) continue;
       const files = fs.readdirSync(c).filter((f) => f.endsWith(".jsonl"));
       for (const f of files) result.push(path.join(c, f));
+    } catch {
+      /* non-fatal */
+    }
+  }
+  return result;
+}
+
+/**
+ * Given a session JSONL path, return any Workflow-tool inner-agent transcripts,
+ * which Claude Code writes NESTED at
+ *   <sessionId>/subagents/workflows/<runId>/agent-*.jsonl
+ * (one level deeper than the flat sub-agent transcripts findSessionSubagents
+ * returns). Kept separate so the regular sub-agent import path is unchanged —
+ * these are summarized by the Workflow-run ingest, not imported as sub-agents —
+ * while the snapshot writer can still preserve them for the Conversation tab.
+ *
+ * Each entry is { abs, rel } where `rel` is the path relative to the session's
+ * `subagents` root (e.g. "workflows/<runId>/agent-<id>.jsonl"), so the snapshot
+ * can mirror the live nested layout exactly.
+ */
+function findSessionWorkflowSubagents(sessionJsonlPath) {
+  const dir = path.dirname(sessionJsonlPath);
+  const sessionId = path.basename(sessionJsonlPath, ".jsonl");
+  const subagentRoots = [
+    path.join(dir, sessionId, "subagents"),
+    path.join(dir, "subagents", sessionId),
+  ];
+  const result = [];
+  for (const root of subagentRoots) {
+    const workflowsDir = path.join(root, "workflows");
+    try {
+      if (!fs.existsSync(workflowsDir)) continue;
+      for (const d of fs.readdirSync(workflowsDir, { withFileTypes: true })) {
+        if (!d.isDirectory()) continue;
+        const runDir = path.join(workflowsDir, d.name);
+        for (const f of fs.readdirSync(runDir).filter((x) => x.endsWith(".jsonl"))) {
+          result.push({
+            abs: path.join(runDir, f),
+            rel: path.join("workflows", d.name, f),
+          });
+        }
+      }
     } catch {
       /* non-fatal */
     }
@@ -1943,6 +2067,8 @@ module.exports = {
   collectJsonlFiles,
   classifyJsonl,
   findSessionSubagents,
+  findSessionWorkflowSubagents,
+  snapshotTranscript,
   importSession,
   scanAndImportSubagents,
   combineSessionTokens,

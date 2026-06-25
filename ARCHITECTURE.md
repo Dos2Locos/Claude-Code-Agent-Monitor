@@ -38,6 +38,7 @@ Architectural overview and technical reference for the Agent Dashboard system, c
 ![Electron](https://img.shields.io/badge/Electron-35-47848F?style=flat-square&logo=electron&logoColor=white)
 ![electron-builder](https://img.shields.io/badge/electron--builder-25.1-2c2e3b?style=flat-square&logo=electron&logoColor=white)
 ![macOS](https://img.shields.io/badge/macOS-Desktop_App-000000?style=flat-square&logo=apple&logoColor=white)
+![Windows](https://img.shields.io/badge/Windows-Desktop_App-0078D6?style=flat-square&logo=windows&logoColor=white)
 ![SMAppService](https://img.shields.io/badge/SMAppService-Login_Items-000000?style=flat-square&logo=apple&logoColor=white)
 ![Universal DMG](https://img.shields.io/badge/Universal_DMG-arm64_%2B_x64-7c3aed?style=flat-square&logo=apple&logoColor=white)
 ![Vitest](https://img.shields.io/badge/Vitest-1.0-646CFF?style=flat-square&logo=vitest&logoColor=white)
@@ -87,7 +88,7 @@ Architectural overview and technical reference for the Agent Dashboard system, c
 - [Update Notifier Subsystem](#update-notifier-subsystem)
 - [Tabby Companion Subsystem](#tabby-companion-subsystem)
 - [VS Code Extension Architecture](#vs-code-extension-architecture)
-- [Desktop App Architecture (macOS / Electron)](#desktop-app-architecture-macos--electron)
+- [Desktop App Architecture (macOS & Windows / Electron)](#desktop-app-architecture-macos--windows--electron)
 - [Security Considerations](#security-considerations)
 - [Performance Characteristics](#performance-characteristics)
 - [Deployment Modes](#deployment-modes)
@@ -228,7 +229,7 @@ sequenceDiagram
 
     API->>TX: BEGIN TRANSACTION
     TX->>TX: ensureSession(session_id)
-    Note over TX: Creates session + main agent<br/>if first contact. Also persists<br/>data.transcript_path onto the session row<br/>(SQL-guarded, so subsequent events no-op).
+    Note over TX: Creates session + main agent<br/>if first contact. Also persists<br/>data.transcript_path onto the session row<br/>(SQL-guarded, so subsequent events no-op).<br/>Syncs sessions.name from the transcript title<br/>(custom-title &gt; ai-title).
 
     TX->>TX: Process by hook_type
     Note over TX: Dispatches by hook_type. Maintains the agent and<br/>session state machines plus the awaiting_input_since flag.<br/>SubagentStop also triggers a JSONL scan that emits per_tool<br/>events under each subagent. See the hook table below for<br/>the full per_event behaviour.
@@ -293,12 +294,23 @@ graph TD
     PRICING[routes/pricing.js<br/>Cost calculation + pricing CRUD]
     SETTINGS[routes/settings.js<br/>System info + data management]
     WORKFLOWS[routes/workflows.js<br/>Workflow visualizations]
+    ALERTSR[routes/alerts.js<br/>Alert rules CRUD + feed]
+    ALERTS[lib/alerts.js<br/>Rule evaluation engine]
+    WEBHOOKSR[routes/webhooks.js<br/>Webhook target CRUD + test]
+    WEBHOOKS[lib/webhooks.js<br/>Webhook delivery engine]
+    WEBHOOKPROV[lib/webhook-providers.js<br/>14-provider registry + formatters]
 
     INDEX --> DB
     INDEX --> WS
-    INDEX --> HOOKS & SESSIONS & AGENTS & EVENTS & STATS & PRICING & SETTINGS & WORKFLOWS
+    INDEX --> HOOKS & SESSIONS & AGENTS & EVENTS & STATS & PRICING & SETTINGS & WORKFLOWS & ALERTSR & WEBHOOKSR
 
     HOOKS --> DB & WS & TC
+    HOOKS --> ALERTS
+    ALERTSR --> DB & WS & ALERTS
+    ALERTS --> DB & WS
+    ALERTS --> WEBHOOKS
+    WEBHOOKSR --> DB & WEBHOOKS & WEBHOOKPROV
+    WEBHOOKS --> DB & WEBHOOKPROV
     SETTINGS --> DB & TC
     INDEX --> TC
     SESSIONS --> DB & WS
@@ -322,17 +334,22 @@ graph TD
 | `server/db.js`            | SQLite connection with WAL mode, schema migration (CREATE TABLE IF NOT EXISTS + ALTER TABLE for column additions), all prepared statements as a reusable `stmts` object. Tries `better-sqlite3` first, falls back to `node:sqlite` via `compat-sqlite.js`. Migrations use literal defaults for ALTER TABLE since SQLite does not support expressions like `strftime()` in column defaults added via ALTER TABLE                                                                                                                      |
 | `server/compat-sqlite.js` | Compatibility wrapper that gives Node.js built-in `node:sqlite` (`DatabaseSync`) the same API as `better-sqlite3` — pragma, transaction, prepare. Used as automatic fallback when the native module is unavailable (Node 22+)                                                                                                                                                                                                                                                                                                        |
 | `server/websocket.js`     | WebSocket server on `/ws` path, 30s heartbeat with ping/pong dead connection detection, typed broadcast function                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `routes/hooks.js`         | Core event processing inside a SQLite transaction. Auto-creates sessions/agents. Handles 8 hook types: SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop, SubagentStop, Notification, SessionEnd, plus synthetic `Compaction` events. Manages the agent state machine plus the `awaiting_input_since` overlay (stamped on SessionStart for fresh CLIs, on non-error Stop, and on permission Notifications (which now also set agent status to `waiting`); cleared on UserPromptSubmit / PreToolUse / PostToolUse / SessionStart-resume / SessionEnd; SubagentStop intentionally does NOT clear it). After `res.json()` returns on `SubagentStop`, fires a fire-and-forget `scanAndImportSubagents` (from `scripts/import-history.js`) that parses every `subagents/agent-*.jsonl`, pairs `tool_use` ↔ `tool_result` blocks by `tool_use_id`, and emits per-tool `PreToolUse` + `PostToolUse` events under each subagent's own `agent_id` — closes the gap where subagent-internal tool calls would otherwise never reach the events table. Session reactivation on resume (including Stop/SubagentStop reactivation for imported completed/abandoned sessions), orphaned-session cleanup uses `DASHBOARD_STALE_MINUTES` (default 180). Uses a shared `TranscriptCache` instance (`server/lib/transcript-cache.js`) for extraction of tokens, API errors, turn durations, thinking blocks, and usage extras — stat-based caching with incremental byte-offset reads avoids re-reading entire JSONL files on every event. Detects compaction via `isCompactSummary` in JSONL transcripts and creates compaction agents + events (deduplicated by uuid). Token baselines (`baseline_*` columns) preserve pre-compaction totals so no usage is lost. Cache entries are evicted on SessionEnd. **SessionEnd preserves error state** — if the session is in `error` when it exits, the error status is kept (previously always overwritten to `completed`). **Error recovery**: only `UserPromptSubmit` and `PreToolUse` can recover a session from `error` back to active |
-| `routes/sessions.js`      | Standard CRUD with pagination. GET includes agent count via LEFT JOIN. POST is idempotent on session ID                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `routes/hooks.js`         | Core event processing inside a SQLite transaction. Auto-creates sessions/agents. Handles 8 hook types: SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop, SubagentStop, Notification, SessionEnd, plus synthetic `Compaction` events. Manages the agent state machine plus the `awaiting_input_since` overlay (stamped on SessionStart for fresh CLIs, on non-error Stop, and on permission Notifications (which now also set agent status to `waiting`); cleared on UserPromptSubmit / PreToolUse / PostToolUse / SessionStart-resume / SessionEnd; SubagentStop intentionally does NOT clear it). After `res.json()` returns on `SubagentStop`, fires a fire-and-forget `scanAndImportSubagents` (from `scripts/import-history.js`) that parses every `subagents/agent-*.jsonl`, pairs `tool_use` ↔ `tool_result` blocks by `tool_use_id`, and emits per-tool `PreToolUse` + `PostToolUse` events under each subagent's own `agent_id` — closes the gap where subagent-internal tool calls would otherwise never reach the events table. Session reactivation on resume (including Stop/SubagentStop reactivation for imported completed/abandoned sessions), orphaned-session cleanup uses `DASHBOARD_STALE_MINUTES` (default 180). Uses a shared `TranscriptCache` instance (`server/lib/transcript-cache.js`) for extraction of tokens, API errors, turn durations, thinking blocks, and usage extras — stat-based caching with incremental byte-offset reads avoids re-reading entire JSONL files on every event. Detects compaction via `isCompactSummary` in JSONL transcripts and creates compaction agents + events (deduplicated by uuid). Token baselines (`baseline_*` columns) preserve pre-compaction totals so no usage is lost. Cache entries are evicted on SessionEnd. **SessionEnd preserves error state** — if the session is in `error` when it exits, the error status is kept (previously always overwritten to `completed`). **Error recovery**: only `UserPromptSubmit` and `PreToolUse` can recover a session from `error` back to active. **Session naming**: on every event, syncs `sessions.name` from the transcript title surfaced by `TranscriptCache` and broadcasts `session_updated` — an explicit `custom-title` (`/rename`, `claude -n`, picker Ctrl+R) always wins, an `ai-title` (auto / plan-accept) only fills a placeholder/auto name (`Session <id8>` or a cwd-folder import name) so a user-chosen name is never clobbered. The guarded `updateSessionName` no-ops on the unchanged case, so the broadcast path stays quiet; the 15 s error-watchdog runs the same sync for idle sessions that fire no hook after a rename |
+| `routes/sessions.js`      | Standard CRUD with pagination. GET includes agent count via LEFT JOIN. POST is idempotent on session ID. GET `/:id/transcript` also surfaces `custom-title` lines as synthetic `session_event` (rename) messages — deduped, with `ai-title` excluded — so TUI-only `/rename` (which writes no user/assistant turn) is still visible in the conversation viewer. It also surfaces `system`/`local_command` lines: newer Claude Code builds write a local slash command's invocation and captured output (`<command-name>`, `<local-command-stdout>`/`stderr`) as `system`/`local_command` entries with the TUI markup in a top-level `content` string (older builds used `user` messages), so the route re-emits those as user-side text and the client's `tuiSegments` parser renders the command pill + its output (e.g. `/color` → a `/color` pill plus "Session color set to: cyan"). Content-less `local_command` lines (e.g. `/clear`) and every other `system` subtype (`turn_duration`, `stop_hook_summary`, …) are dropped as noise |
 | `routes/agents.js`        | CRUD with status/session_id filtering. PATCH broadcasts `agent_updated`                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `routes/events.js`        | Read-only event listing with session_id filter and pagination                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `routes/stats.js`         | Single aggregate query returning total/active counts + status distributions                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `routes/analytics.js`     | Extended analytics — token totals, tool usage counts, daily event/session trends, agent type distribution. The client-side analytics heatmap grid is aligned to a Sunday start for correct day-of-week positioning                                                                                                                                                                                                                                                                                                                   |
-| `routes/pricing.js`       | Model pricing CRUD (list/upsert/delete), per-session and global cost calculation with pattern-based model matching                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| `routes/settings.js`      | System info (DB size, hook status, server uptime, transcript cache stats), data export as JSON, session cleanup (abandon stale, purge old), clear all data, reset pricing, reinstall hooks                                                                                                                                                                                                                                                                                                                                           |
+| `routes/pricing.js`       | Model pricing CRUD (list/upsert/delete) and per-session / global cost calculation with pattern-based model matching. Cost is computed per token bucket — keyed by (model, speed, inference_geo, service_tier) — applying fast-mode premium, US data-residency (1.1x), and Batch (0.5x) modifiers, the 5m/1h cache-write split, plus server-tool surcharges (web search $10/1k; code execution estimated by container-time with the monthly free-hours allowance; web fetch free). Feature rates + modifier math live in `lib/pricing-constants.js`; usage normalization in `lib/token-usage.js` |
+| `routes/settings.js`      | System info (DB size, hook status, server uptime, transcript cache stats), data export as JSON, session cleanup (abandon stale, purge old), clear all data (including the fired-alert feed and webhook delivery log; alert *rules* and webhook *targets* are preserved as user configuration), reset pricing, reinstall hooks                                                                                                                                                                                                                                                                                                                                           |
+| `routes/alerts.js`        | HTTP surface for the rules-based alerting engine: alert-rule CRUD (`GET/POST /api/alerts/rules`, `PATCH/DELETE /api/alerts/rules/:id` — rule_type is immutable after creation, config re-validated against the stored type on PATCH), the fired-alert feed (`GET /api/alerts` with `?unacked=true` + pagination, response carries `total` and `unacked` counts), and acknowledgement (`POST /api/alerts/:id/ack`, `POST /api/alerts/ack-all`, broadcasting `alert_updated`). Every rule mutation calls `invalidateRuleCache()` so the evaluation engine picks up changes immediately |
+| `lib/alerts.js`           | Rule evaluation engine for the alerting feature. Four rule types: `event_pattern` (match `event_type` / `tool_name` / `summary_contains`, optionally requiring ≥ `count` matching events within `window_minutes` — counted via a dynamically built, statement-cached SQL query), `token_threshold` (session total tokens ≥ `total_tokens`, only evaluated on token-bearing events: PostToolUse / Stop / SubagentStop / SessionEnd), `inactivity` (active session whose `updated_at` — bumped on every ingested event — is older than `minutes`), and `status_duration` (agent stuck in `working`/`waiting` with no activity for `minutes`, joined against active sessions). Event-driven types run via `evaluateEvent()` called from `routes/hooks.js` **after** the ingest transaction commits and the HTTP response is sent — alerting can never slow down or fail hook ingestion, and `evaluateEvent` is itself fully try/catch-guarded per rule. Time-based types run via `sweepTimeRules()` on a 60 s unref'd interval (same pattern as the hooks watchdog). `fireAlert()` applies per-(rule, session, agent) cooldown dedup (`cooldown_seconds`, default 300) by checking the most recent `alert_events` row for the scope, then persists and broadcasts `alert_triggered`. Enabled rules are cached in memory (hook ingest is hot) and invalidated on every CRUD mutation. `validateRuleConfig()` normalizes + validates type-specific config and is shared with the routes. After persisting and broadcasting a fired alert, `fireAlert()` hands it to `lib/webhooks.js` `dispatchAlert()` fire-and-forget (lazy-required to keep the module graph acyclic) — webhook delivery never blocks or fails alert firing |
+| `routes/webhooks.js`      | HTTP surface for universal webhook targets: target CRUD (`GET/POST /api/webhooks`, `PATCH/DELETE /api/webhooks/:id` — `type` is immutable after creation), a redacted provider catalog (`GET /api/webhooks/providers`, drives the UI form), a synchronous test probe (`POST /api/webhooks/:id/test` — always 200, the `ok` flag carries the downstream delivery result), and a per-target delivery log (`GET /api/webhooks/:id/deliveries`). Validation is registry-driven: required URL (per provider), per-provider config fields, https enforcement, generic-family secret/headers. **Security**: target URLs are masked (host + last 4 chars) and secret config fields + custom-header values are redacted in every response — full URLs, signing secrets, and credentials (routing keys, api keys, bot tokens) are stored server-side and never leave the server. PATCH uses "set-flag" semantics (omit `url`/`secret`/`headers`/`config` to leave unchanged); `config` is merged over the existing config so one field can change without re-sending secrets. Every mutation calls `invalidateWebhookCache()` |
+| `lib/webhook-providers.js`| Declarative registry of the 14 first-class providers (+ generic). Each entry declares a `family` (`chat` / `api` / `generic`), a payload `format`ter, URL resolution (`urlFrom(config)` for Telegram/Opsgenie that derive the endpoint, `defaultUrl` for PagerDuty, or a user-supplied URL), optional `authFrom(config)` headers (Opsgenie GenieKey), and the credential `fields` the UI renders + the route validates. Formatters emit each platform's native body: Slack Block Kit, Discord embed, Teams Adaptive Card wrapped in the Power Automate Workflows `{ type: "message", attachments: [...] }` envelope (the legacy O365-connector MessageCard transport was retired May 2026), Google Chat text, Mattermost/Rocket.Chat Slack-style attachments, Telegram sendMessage (HTML), PagerDuty Events API v2 (with `dedup_key`), Opsgenie Alert API, Splunk On-Call/VictorOps, and the generic `{ event, alert }` envelope. A provider may also declare `verifyResponse(body)` to veto a 2xx that actually signals failure (Splunk On-Call returns 200 with `result:"failure"`). `publicProviders()` returns the redacted catalog. Adding a provider = one registry entry + a formatter — no route or delivery changes |
+| `lib/webhooks.js`         | Universal webhook delivery engine driven by the provider registry. `buildRequest()` resolves the URL, formats the provider-native payload, and assembles headers (provider auth headers + generic-family custom headers + optional HMAC-SHA256 signature via `X-Webhook-Signature` / `X-Webhook-Timestamp`). `dispatchAlert()` fans a fired alert out to every enabled, in-scope target (optional per-rule scoping via `rule_ids`); each `deliver()` POSTs with an `AbortController` timeout and bounded retry/backoff (retries transport errors / 429 / 5xx, never other 4xx) and records the attempt-chain outcome in `webhook_deliveries` (pruned to the newest 2000 rows). Delivery is detached and fully fail-safe — it never throws into the alert path. Enabled targets are cached like alert rules; tunables (`WEBHOOK_TIMEOUT_MS`, `WEBHOOK_MAX_ATTEMPTS`, `WEBHOOK_RETRY_BASE_MS`) are env-overridable. `sendTest()` awaits a synthetic delivery for the test endpoint |
 | `routes/workflows.js`     | Aggregate workflow visualization data (agent orchestration graphs, tool transition flows, collaboration networks, workflow pattern detection, model delegation, error propagation, concurrency timelines, session complexity metrics, compaction impact). Accepts `?status=active\|completed` query parameter to filter all data by session status. Per-session drill-in endpoint with agent tree, tool timeline, and event details |
-| `lib/transcript-cache.js` | Stat-based JSONL transcript cache with incremental byte-offset reads. Shared between `hooks.js` (token extraction on every event) and the periodic compaction scanner (`index.js`). Extracts tokens, compaction entries, API errors (`isApiErrorMessage` + raw error responses), turn durations (`system` subtype `turn_duration`), thinking block counts, and usage extras (service_tier, speed, inference_geo). Uses `(path, mtime, size)` cache key — unchanged files return cached results instantly, grown files only parse new bytes, shrunk files (compaction) trigger full re-read. Each cache entry stores **only** `{mtimeMs, size, bytesRead, result}` — the previous shape that duplicated every growable array at both the top level and inside `result` is gone, halving steady-state memory per entry. Per-entry growable arrays (`turnDurations`, `errors`, `compaction.entries`, `usageExtras.*`) are bounded to `TRANSCRIPT_CACHE_MAX_ARRAY_LEN` (default `1000`, tail-kept) — older items remain in the `events` table thanks to hook dedup, so the cap only affects the in-memory view. Trimming runs both during parse (when an array reaches `2 * MAX_ARRAY_LEN`, amortized O(N)) and at finalize, so even a fresh full-file parse on a multi-day session cannot accumulate an unbounded transient before returning. **Chunked sync byte-stream reader** (`_streamRange`, 4 MiB chunks split on `0x0A` bytes — safe across UTF-8 multibyte sequences — with a growable per-line byte buffer capped at 64 MiB) replaces the previous `readFileSync("utf8")` so transcripts larger than V8's max JS string length (~512 MiB on 64-bit Node 20) parse without aborting Node with `FATAL ERROR: v8::ToLocalChecked Empty MaybeLocal`. Both full and incremental reads share the same line-level state machine (`_initParseState` / `_consumeLine` / `_finalizeState`). LRU eviction caps at 200 entries. Entries evicted on SessionEnd and abandoned session cleanup |
-| `scripts/import-history.js` | Batch history importer used by (a) server startup auto-import, (b) the `/api/import/*` routes, (c) the `import-history` CLI, and (d) live `SubagentStop` ingestion via the exported `scanAndImportSubagents(dbModule, sessionId, transcriptPath)`. Exposes `importAllSessions(dbModule)` for the default `~/.claude/projects` tree and the generalized `importFromDirectory(dbModule, rootDir, {onProgress})` which walks any directory recursively, classifies each `.jsonl` as session vs subagent (with `findSessionSubagents` probing both `<proj>/<sid>/subagents/*` and `<proj>/subagents/<sid>/*` layouts), and funnels everything through the shared `parseSessionFile` + `importSession` pipeline. `parseSubagentFile` extracts ordered `toolEvents` (tool_use + tool_result paired by `tool_use_id`) so `importSubagentFromJsonl` can emit per-tool `PreToolUse` + `PostToolUse` rows under each subagent's own `agent_id`. The importer dedups against live hook-created subagent rows via `findLiveSubagentForJsonl` (session + subagent_type + start-time within 30 s) so backfill never produces parallel `<sid>-jsonl-*` rows. **Re-import is fully incremental**: for each existing session a per-event-type high-water mark (`MAX(created_at) GROUP BY event_type`) is read up-front and only JSONL entries with `ts > cutoff[type]` are inserted for Stop / PostToolUse / TurnDuration / ToolError — so long-running sessions whose transcripts grow across multiple days continue to receive new events on every re-run instead of being blocked by the old "if zero of type X then dump all" check. `sessions.ended_at` is rolled forward to the JSONL's last activity when it surpasses the stored value, and `metadata.user_messages` / `assistant_messages` / `turn_count` are refreshed on every pass. Other idempotency keys are unchanged: `data LIKE '%"tool_use_id":"X"%'` skips any tool event already inserted, compaction agents/events dedup by uuid, API errors dedup by summary, and `baseline_*` columns preserve pre-compaction token totals. Token totals, per-model cost, compactions, subagents, tool events, API errors, and turn durations are identical to live ingestion. Creates `APIError`, `TurnDuration`, and `ToolError` event types during import; subagent tool events carry `imported: true, source: "subagent_jsonl"` in their data payload so analytics can distinguish backfilled rows when needed |
+| `lib/transcript-cache.js` | Stat-based JSONL transcript cache with incremental byte-offset reads. Shared between `hooks.js` (token extraction on every event) and the periodic compaction scanner (`index.js`). Extracts tokens, compaction entries, API errors (`isApiErrorMessage` + raw error responses), turn durations (`system` subtype `turn_duration`), thinking block counts, usage extras (service_tier, speed, inference_geo), and the latest session title — `custom-title` (`/rename`, `claude -n`, picker Ctrl+R) and `ai-title` (auto / plan-accept), append-only so the last value wins, carried through both full and incremental reads. Uses `(path, mtime, size)` cache key — unchanged files return cached results instantly, grown files only parse new bytes, shrunk files (compaction) trigger full re-read. Each cache entry stores **only** `{mtimeMs, size, bytesRead, result}` — the previous shape that duplicated every growable array at both the top level and inside `result` is gone, halving steady-state memory per entry. Per-entry growable arrays (`turnDurations`, `errors`, `compaction.entries`, `usageExtras.*`) are bounded to `TRANSCRIPT_CACHE_MAX_ARRAY_LEN` (default `1000`, tail-kept) — older items remain in the `events` table thanks to hook dedup, so the cap only affects the in-memory view. Trimming runs both during parse (when an array reaches `2 * MAX_ARRAY_LEN`, amortized O(N)) and at finalize, so even a fresh full-file parse on a multi-day session cannot accumulate an unbounded transient before returning. **Chunked sync byte-stream reader** (`_streamRange`, 4 MiB chunks split on `0x0A` bytes — safe across UTF-8 multibyte sequences — with a growable per-line byte buffer capped at 64 MiB) replaces the previous `readFileSync("utf8")` so transcripts larger than V8's max JS string length (~512 MiB on 64-bit Node 20) parse without aborting Node with `FATAL ERROR: v8::ToLocalChecked Empty MaybeLocal`. Both full and incremental reads share the same line-level state machine (`_initParseState` / `_consumeLine` / `_finalizeState`). LRU eviction caps at 200 entries. Entries evicted on SessionEnd and abandoned session cleanup |
+| `scripts/import-history.js` | Batch history importer used by (a) server startup auto-import, (b) the `/api/import/*` routes, (c) the `import-history` CLI, and (d) live `SubagentStop` ingestion via the exported `scanAndImportSubagents(dbModule, sessionId, transcriptPath)`. Exposes `importAllSessions(dbModule)` for the default `~/.claude/projects` tree and the generalized `importFromDirectory(dbModule, rootDir, {onProgress})` which walks any directory recursively, classifies each `.jsonl` as session vs subagent (with `findSessionSubagents` probing both `<proj>/<sid>/subagents/*` and `<proj>/subagents/<sid>/*` layouts), and funnels everything through the shared `parseSessionFile` + `importSession` pipeline. The durable transcript snapshot (`snapshotTranscript`) additionally preserves **nested** Workflow-tool inner-agent transcripts (`subagents/workflows/<runId>/agent-*.jsonl`) via the separate `findSessionWorkflowSubagents` probe — mirroring the run subpath so the read route resolves the snapshot identically to the live file, without pulling those nested agents into the flat sub-agent import (no double-count). `parseSubagentFile` extracts ordered `toolEvents` (tool_use + tool_result paired by `tool_use_id`) so `importSubagentFromJsonl` can emit per-tool `PreToolUse` + `PostToolUse` rows under each subagent's own `agent_id`. The importer dedups against live hook-created subagent rows via `findLiveSubagentForJsonl` (session + subagent_type + start-time within 30 s) so backfill never produces parallel `<sid>-jsonl-*` rows. **Re-import is fully incremental**: for each existing session a per-event-type high-water mark (`MAX(created_at) GROUP BY event_type`) is read up-front and only JSONL entries with `ts > cutoff[type]` are inserted for Stop / PostToolUse / TurnDuration / ToolError — so long-running sessions whose transcripts grow across multiple days continue to receive new events on every re-run instead of being blocked by the old "if zero of type X then dump all" check. `sessions.ended_at` is rolled forward to the JSONL's last activity when it surpasses the stored value, and `metadata.user_messages` / `assistant_messages` / `turn_count` are refreshed on every pass. `parseSessionFile` also captures the transcript title (`custom-title` / `ai-title`) and `importSession` prefers it for `sessions.name` over the cwd-folder fallback, backfilling existing auto/placeholder names on re-import (same precedence as the live hook sync). Other idempotency keys are unchanged: `data LIKE '%"tool_use_id":"X"%'` skips any tool event already inserted, compaction agents/events dedup by uuid, API errors dedup by summary, and `baseline_*` columns preserve pre-compaction token totals. Token totals, per-model cost, compactions, subagents, tool events, API errors, and turn durations are identical to live ingestion. Creates `APIError`, `TurnDuration`, and `ToolError` event types during import; subagent tool events carry `imported: true, source: "subagent_jsonl"` in their data payload so analytics can distinguish backfilled rows when needed |
 | `server/routes/import.js`   | Express router for the Import History feature. Three endpoints funnel into the same pipeline: `POST /api/import/rescan` (default projects dir), `POST /api/import/scan-path` (arbitrary absolute dir with `~` expansion), `POST /api/import/upload` (multer multipart accepting `.jsonl`, `.meta.json`, `.zip`, `.tar`, `.tar.gz`, `.tgz`, `.gz`). `GET /api/import/guide` returns OS-aware instructions + archive command + default-dir stats. Each request uses a per-request temp dir (`req._ccamUploadDir` for multer staging, a separate `workDir` for extraction) that is reclaimed in `finally`. Progress is broadcast as `import.progress` websocket messages throttled at ~150 ms. Limits configurable via `CCAM_IMPORT_MAX_BYTES` / `CCAM_IMPORT_MAX_FILES` |
 | `server/lib/archive.js`     | Safe archive extraction: `.zip` via `adm-zip`, `.tar`/`.tar.gz`/`.tgz` via `tar`, plain `.gz` via `zlib` in streaming mode. Every entry is validated through `safeJoin` which rejects absolute paths and `..` traversal before any bytes are written. Enforces a hard extraction cap (`MAX_EXTRACT_BYTES`, default 4 GB, tunable via `CCAM_IMPORT_MAX_EXTRACT_BYTES`) with `ExtractionLimitError` surfaced as HTTP 413 from the upload route — defense against zip/tar/gzip bombs. Also provides `detectKind` for filename-based dispatch and `mkTempDir`/`rmTempDir` helpers |
 | `lib/cc-discovery.js`     | Read-only discovery of every Claude Code config surface for the Config Explorer page. Pure file reads; never writes. Surfaces: skills (`<root>/skills/<name>/SKILL.md`), subagents (`<root>/agents/*.md`), slash commands (`<root>/commands/*.md`), output styles (`<root>/output-styles/*.md`), plugins (`<CLAUDE_HOME>/plugins/installed_plugins.json` joined with `enabledPlugins` in settings + per-plugin `contributes` count by scanning the install dir + `plugin.json` metadata), marketplaces (`known_marketplaces.json` enriched with each `marketplace.json`), MCP servers (top-level + per-project from `~/.claude.json`), hooks (across user / project / project-local settings.json), keybindings (`<CLAUDE_HOME>/keybindings.json`), statusline config + `statusline.py` / `statusline-command.sh` content, hook scripts dir (`<CLAUDE_HOME>/hooks/`), settings (with secret-key redaction matching `/token\|secret\|password\|api[_-]?key\|auth/i`), memory (`CLAUDE.md` at user + project). Path containment via `isUnder()` — every read must resolve under CLAUDE_HOME, project `.claude/`, or be a project CLAUDE.md. 256 KB read cap. Minimal YAML frontmatter parser handles `key: value` + quoted strings + indented continuation lines |
@@ -440,6 +457,24 @@ graph TD
     style APP fill:#6366f1,stroke:#818cf8,color:#fff
     style LAYOUT fill:#1a1a28,stroke:#2a2a3d,color:#e4e4ed
 ```
+
+### Splash & loading UX
+
+- **`SplashScreen.tsx`** — rendered by `App.tsx` as a fixed full-screen overlay alongside the router. Shows once per browser session (`sessionStorage` gate, read synchronously so a repeat mount never flashes). Time-aware greeting + localized tagline/subtexts (`splash` i18n namespace, en/zh/vi) + an animated node-graph brand mark on a dark backdrop (radial glow, drifting constellation, grain). The backdrop is **opaque from the first paint** (no entrance fade on the root) so the app rendered behind it never flashes through; only the inner content cascades in. Holds ~2.5 s, then fades out and unmounts; click-to-skip; honors `prefers-reduced-motion`. CSS-only keyframes, no added dependencies.
+- **Loading skeletons** — the shared `Skeleton` primitive (`components/Skeleton.tsx`) uses Tailwind `animate-pulse`. `Analytics.tsx` now renders a pulsing `AnalyticsChartsSkeleton` for the whole chart region while `data` is null (previously it fell back to empty/zero charts).
+- **`workflows/CompactionImpact.tsx`** — redesigned from a one-bar-per-session chart into a "sessions by compaction count" histogram (D3) with axis titles, stat tiles (total / sessions affected / avg / peak), an explanatory help line, a plain-English summary, and rich React-managed hover tooltips (full-height per-bucket hit-area + bar highlight) matching the other charts.
+- **`Workflows.tsx` `Section`** — the right-aligned section subtitle is clamped to a single line (`truncate` + `max-w` + hover `title`) so a long translation never wraps and unbalances the header; the full text stays in the section's `i` popover.
+
+### Self-hosted assets (no external CDN)
+
+Nothing the dashboard or docs render is fetched from a third-party CDN at runtime — all fonts and scripts are served locally, so every surface works fully offline and leaks nothing to external hosts.
+
+- **React app fonts** — Inter + JetBrains Mono are imported from `@fontsource` (latin subset) in `client/src/main.tsx`. Vite bundles the per-weight WOFF2 into `client/dist/assets/` with content hashes at build time; there is no Google Fonts `<link>`. Importing the `latin-*` subset entry points keeps the emitted set to one WOFF2 per weight.
+- **Static pages (landing + wiki)** — load a self-hosted `@font-face` sheet at the repo-root `fonts/` directory (`fonts/fonts.css` + the `*.woff2` files). The root `index.html` references `fonts/fonts.css`; the wiki references `../fonts/fonts.css` (relative paths resolve under GitHub Pages).
+- **Wiki Mermaid** — vendored as `wiki/mermaid.min.js` (the genuine minified `mermaid@10.9.6` from npm, with a provenance banner; `.prettierignore`d) and loaded via a local `<script>` instead of `cdn.jsdelivr.net`.
+- **VS Code extension** — the inline `getErrorHtml()` error page dropped its Google Fonts loader for a system font stack (no bundler / local font path available in that webview).
+
+Net effect: no `fonts.googleapis.com`, `fonts.gstatic.com`, or `cdn.jsdelivr.net` requests anywhere (verified by `git grep`).
 
 ### PWA Architecture
 
@@ -575,11 +610,11 @@ graph LR
 | `/`             | Dashboard     | Two tabs (Monitor / Health). Monitor: `GET /api/stats`, `GET /api/agents`, `GET /api/events`, `GET /api/agents?session_id={sid}` (subagent hierarchy), dynamic item counts via `ResizeObserver`. Health: `GET /api/settings/info` + `GET /api/workflows` (5 s auto-refresh) — composite health score, storage donut, cache/error/success gauges, tool invocation bars, subagent effectiveness, model token distribution, compaction stats |
 | `/kanban`       | KanbanBoard   | View toggle persisted in `localStorage`. Agents view: `GET /api/agents?status={each}` per-status (default 10000 cap). Sessions view: `GET /api/sessions?status={each}&limit=10000` per-status. Each column then paginates client-side at `COLUMN_PAGE_SIZE=10`; the WS subscription scopes to the active view. |
 | `/sessions`     | Sessions      | `GET /api/sessions?status=&q=&limit=PAGE_SIZE&offset=page*PAGE_SIZE` — true server-side pagination. The search box passes `q` to the server (300 ms debounced). Response carries `total` for the paginator UI. Cost computation runs server-side over the visible page only. Polls `/api/run` (and listens for `run_status`) to badge any row whose session is currently being driven from `/run` with a clickable green **▶ Run** pill |
-| `/sessions/:id` | SessionDetail | `GET /api/sessions/:id` (agents + events), `GET /api/sessions/:id/stats` (overview tiles, top tools, subagent breakdown, token totals — debounced live-refresh on `new_event`/`agent_*`/`session_updated`), `GET /api/sessions/:id/transcripts` (Conversation tab transcript list), `GET /api/sessions/:id/transcript` (cursor-paginated message stream). Probes `/api/run` (and listens for `run_status`) to surface a green "Open in Run page" banner when this session is currently being driven by an in-flight Run handle |
+| `/sessions/:id` | SessionDetail | `GET /api/sessions/:id` (agents + events), `GET /api/sessions/:id/stats` (overview tiles, top tools, subagent breakdown, token totals — debounced live-refresh on `new_event`/`agent_*`/`session_updated`), `GET /api/sessions/:id/transcripts` (Conversation tab transcript list), `GET /api/sessions/:id/transcript` (cursor-paginated message stream, including inline `session_event` rename markers; optional `run_id` resolves a workflow inner agent's nested transcript). Probes `/api/run` (and listens for `run_status`) to surface a green "Open in Run page" banner when this session is currently being driven by an in-flight Run handle |
 | `/activity`     | ActivityFeed  | `GET /api/events?limit=100` — click row to expand inline payload; "Session →" button navigates to `/sessions/:id` |
 | `/analytics`    | Analytics     | `GET /api/analytics`                                   |
 | `/workflows`    | Workflows     | `GET /api/workflows?status=active\|completed`, `GET /api/workflows/session/:id` + WebSocket auto-refresh (3s debounce) |
-| `/cc-config`    | CcConfig      | 12-tab Claude Code configuration explorer. Reads via `GET /api/cc-config/{overview,skills,agents,commands,output-styles,plugins,marketplaces,mcp,hooks,hook-scripts,keybindings,statusline,settings,memory}`. Mutations for skills/agents/commands/output-styles/memory via `PUT /api/cc-config/file` + `DELETE /api/cc-config/file` (timestamped backups, atomic writes). `GET /api/cc-config/file?path=…` for single-file viewer. `GET /api/cc-config/backups` for the recovery modal. Subscribes to `cc_config_changed` WS messages for live refresh on both dashboard mutations and external file edits picked up by `cc-watcher`. Live / Offline indicator next to the title |
+| `/cc-config`    | CcConfig      | 12-tab Claude Code configuration explorer. Reads via `GET /api/cc-config/{overview,skills,agents,commands,output-styles,plugins,marketplaces,mcp,hooks,hook-scripts,keybindings,statusline,settings,memory}`. Mutations for skills/agents/commands/output-styles/memory via `PUT /api/cc-config/file` + `DELETE /api/cc-config/file` (timestamped backups, atomic writes). `GET /api/cc-config/file?path=…` for single-file viewer. `GET /api/cc-config/backups` for the recovery modal. Subscribes to `cc_config_changed` WS messages for live refresh on both dashboard mutations and external file edits picked up by `cc-watcher`. The Settings tab leads with a client-side **Current configuration** summary that resolves the `/config` options (model, verbose, theme, output style, effort, auto-compact, notifications, …) across user / project / project-local scopes, showing defaults when unset. Live / Offline indicator next to the title |
 | `/run`          | Run           | Spawns `claude` subprocesses with chat-style streaming UI. `GET /api/run/{binary,cwds,files}` for pre-flight + `@`-file autocomplete; `POST /api/run` to spawn (accepts `effort: low\|medium\|high`); `POST /api/run/:id/message` for follow-up turns; `DELETE /api/run/:id` to stop; `GET /api/run/:id?envelopes=1` for attach-with-history. WS messages: `run_stream` (includes `stream_event` deltas from `--include-partial-messages`), `run_status`, `run_input_ack`. Streaming pipeline: each WS envelope is dispatched through `flushSync` so React 18 doesn't batch bursts into a single render; a `useTypewriterEnvelopes` hook drips text/thinking deltas via `requestAnimationFrame` so even short replies type in; the merge code preserves `_streaming` and the delta-accumulated content array when claude's canonical `assistant` envelope arrives mid-stream so thinking blocks aren't dropped. Tier 1 TUI parity: collapsible-to-pill limitations banner, slash + `@`-file autocomplete (dropdowns open upward, slash matching uses tiered scoring), live token / context-window meter, status header. Live / Offline indicator next to the title |
 | `/settings`     | Settings      | `GET /api/settings/info`, `GET /api/pricing`, `GET /api/pricing/cost` + `localStorage` for notification prefs |
 | `/*`            | NotFound      | None (static 404 page)                                 |
@@ -749,14 +784,18 @@ erDiagram
     token_usage {
         TEXT session_id PK "FK to sessions + part of composite PK"
         TEXT model PK "Model identifier + part of composite PK"
+        TEXT speed PK "standard or fast (fast mode) — pricing dimension"
+        TEXT inference_geo PK "global or us (data residency) — pricing dimension"
+        TEXT service_tier PK "standard or batch (Batch API) — pricing dimension"
         INTEGER input_tokens "Current JSONL total"
         INTEGER output_tokens "Current JSONL total"
         INTEGER cache_read_tokens "Current JSONL total"
-        INTEGER cache_write_tokens "Current JSONL total"
-        INTEGER baseline_input "Accumulated pre-compaction tokens"
-        INTEGER baseline_output "Accumulated pre-compaction tokens"
-        INTEGER baseline_cache_read "Accumulated pre-compaction tokens"
-        INTEGER baseline_cache_write "Accumulated pre-compaction tokens"
+        INTEGER cache_write_tokens "Total ephemeral cache writes (5m + 1h)"
+        INTEGER cache_write_1h_tokens "Subset stored at the 1h tier; 5m = total - 1h"
+        INTEGER web_search_requests "server_tool_use web search count"
+        INTEGER web_fetch_requests "server_tool_use web fetch count"
+        INTEGER code_execution_requests "server_tool_use code execution count"
+        INTEGER baseline_input "Accumulated pre-compaction tokens (one per metric)"
     }
 
     model_pricing {
@@ -764,8 +803,11 @@ erDiagram
         TEXT display_name "Human-readable name"
         REAL input_per_mtok "Cost per million input tokens"
         REAL output_per_mtok "Cost per million output tokens"
-        REAL cache_read_per_mtok "Cost per million cache read tokens"
-        REAL cache_write_per_mtok "Cost per million cache write tokens"
+        REAL cache_read_per_mtok "Cost per million cache read tokens (cache hits)"
+        REAL cache_write_per_mtok "Cost per million 5m cache-write tokens"
+        REAL cache_write_1h_per_mtok "Cost per million 1h cache-write tokens"
+        REAL fast_input_per_mtok "Fast-mode input rate (0 = none)"
+        REAL fast_output_per_mtok "Fast-mode output rate (0 = none)"
         TEXT updated_at "ISO 8601"
     }
 
@@ -773,6 +815,61 @@ erDiagram
         TEXT endpoint PK "Subscription URL"
         TEXT p256dh "Public key"
         TEXT auth "Auth secret"
+        TEXT created_at "ISO 8601"
+    }
+
+    alert_rules ||--o{ alert_events : fires
+
+    alert_rules {
+        TEXT id PK "UUID"
+        TEXT name "User-facing rule name"
+        TEXT rule_type "event_pattern|inactivity|status_duration|token_threshold"
+        TEXT config "Type-specific JSON config"
+        INTEGER enabled "1|0"
+        INTEGER cooldown_seconds "Per-scope dedup window, default 300"
+        TEXT created_at "ISO 8601"
+        TEXT updated_at "ISO 8601"
+    }
+
+    alert_events {
+        INTEGER id PK "Auto-increment"
+        TEXT rule_id FK "References alert_rules.id, ON DELETE CASCADE"
+        TEXT rule_name "Snapshot — survives rule edits"
+        TEXT rule_type "Snapshot"
+        TEXT session_id "No FK — alert history survives session cleanup"
+        TEXT agent_id "Affected agent or NULL"
+        TEXT message "Human-readable alert text"
+        TEXT details "JSON context blob"
+        TEXT triggered_at "ISO 8601"
+        TEXT acknowledged_at "ISO 8601 or NULL"
+    }
+
+    webhook_targets ||--o{ webhook_deliveries : delivers
+
+    webhook_targets {
+        TEXT id PK "UUID"
+        TEXT name "User-facing target name"
+        TEXT type "provider key — slack|discord|teams|telegram|pagerduty|… (15)"
+        TEXT url "Endpoint URL (may be '' when derived) — server-only, masked in responses"
+        INTEGER enabled "1|0"
+        TEXT secret "Generic-family HMAC-SHA256 signing secret or NULL"
+        TEXT headers "Generic-family extra request headers (JSON) or NULL"
+        TEXT rule_ids "JSON array scoping to rules, or NULL = all"
+        TEXT config "Provider params JSON (routing_key, chat_id, …); secrets redacted in responses"
+        TEXT created_at "ISO 8601"
+        TEXT updated_at "ISO 8601"
+    }
+
+    webhook_deliveries {
+        INTEGER id PK "Auto-increment"
+        TEXT target_id FK "References webhook_targets.id, ON DELETE CASCADE"
+        TEXT target_name "Snapshot"
+        TEXT target_type "Snapshot"
+        INTEGER alert_id "alert_events.id, NULL for test pings (no FK)"
+        TEXT status "success|failed"
+        INTEGER status_code "Last HTTP status or NULL"
+        INTEGER attempts "Attempt-chain length"
+        TEXT error "Failure reason or NULL"
         TEXT created_at "ISO 8601"
     }
 ```
@@ -788,6 +885,11 @@ erDiagram
 | `idx_events_created`   | events   | `created_at DESC` | Activity feed ordering         |
 | `idx_sessions_status`  | sessions | `status`          | Status filter on Sessions page and Kanban Sessions view |
 | `idx_sessions_started` | sessions | `started_at DESC` | Default sort order             |
+| `idx_alert_events_triggered` | alert_events | `triggered_at DESC` | Alert feed ordering      |
+| `idx_alert_events_rule` | alert_events | `rule_id`        | Cooldown lookup per rule       |
+| `idx_alert_events_session` | alert_events | `session_id`  | Per-session alert history      |
+| `idx_webhook_deliveries_target` | webhook_deliveries | `target_id, created_at DESC` | Per-target delivery log + last-delivery lookup |
+| `idx_webhook_deliveries_created` | webhook_deliveries | `created_at DESC` | Delivery-log pruning (newest 2000)  |
 
 ### SQLite Configuration
 
@@ -823,8 +925,9 @@ All messages are JSON with this envelope:
 
 ```typescript
 {
-  type: "session_created" | "session_updated" | "agent_created" | "agent_updated" | "new_event";
-  data: Session | Agent | DashboardEvent;
+  type: "session_created" | "session_updated" | "agent_created" | "agent_updated" | "new_event"
+      | "alert_triggered" | "alert_updated" | "workflow_upserted";
+  data: Session | Agent | DashboardEvent | AlertEvent | WorkflowRun;
   timestamp: string; // ISO 8601
 }
 ```
@@ -1104,6 +1207,7 @@ usage for billing purposes.
 | Default Claude Code                             | `<proj>/<sid>.jsonl`                         | Session transcript                                                      |
 | Default subagent                                | `<proj>/<sid>/subagents/agent-*.jsonl`       | Paired with parent on discovery                                         |
 | Alternative subagent                            | `<proj>/subagents/<sid>/agent-*.jsonl`       | Paired with parent on discovery                                         |
+| Workflow inner-agent (nested)                   | `<proj>/<sid>/subagents/workflows/<runId>/agent-*.jsonl` | Summarized by Workflow-run ingest; transcript resolved on read + preserved in the durable snapshot |
 | Orphan subagent (no parent JSONL in source)     | `<proj>/subagents/<sid>/agent-*.jsonl`       | `importFromDirectory` probes both candidates; attaches if `sid` exists  |
 | Flat JSONL drop                                 | `<root>/<sid>.jsonl`                         | Recognized as a loose session                                           |
 | Archives (`.zip`, `.tar`, `.tar.gz`, `.tgz`)    | any of the above nested inside               | Extracted into a per-request temp dir, then walked by the same importer |
@@ -1155,6 +1259,149 @@ are never throttled.
 
 Phases: `start` → `scan` → `extract` (upload only) → `parse` →
 `complete`, with `error` / `extract_error` replacing `complete` on failure.
+
+---
+
+## Workflow-Tool Run Ingestion
+
+"Dynamic workflows" — the fleets of sub-agents spawned by the Claude Code
+`Workflow` tool (and self-paced `/loop` runs) — are **invisible to hooks**.
+Inner `agent()` calls emit no `PreToolUse`/`SubagentStop` events, so hook-based
+ingestion can never see the fleet. Instead, everything is persisted on disk
+under the launching session's transcript folder:
+
+```
+<projects>/<enc-cwd>/<sessionId>/
+  workflows/
+    scripts/<name>-wf_<runId>.js          # the workflow script — written at LAUNCH
+    wf_<runId>.json                       # the run journal — written at COMPLETION
+  subagents/
+    workflows/<runId>/agent-<agentId>.jsonl  # inner-agent transcript (current builds — NESTED per run)
+    agent-<agentId>.jsonl                    # flat layout — older builds / regular sub-agents
+```
+
+The run journal (`wf_<runId>.json`) is the first-class record: identity
+(`runId`, `taskId`, `workflowName`), lifecycle (`status`, `startTime`,
+`durationMs`, `defaultModel`), aggregates (`agentCount`, `totalTokens`,
+`totalToolCalls`), `phases[]`, and `workflowProgress[]` — one entry per inner
+agent with `agentId`, `agentType`, `model`, `state`, `label`, `phaseTitle`,
+tokens, tool calls, duration, and previews. Critically,
+`workflowProgress[].agentId` is the **exact** `agent-<agentId>.jsonl` basename,
+so the workflow → inner-agent linkage is explicit. Current Claude Code builds
+write that transcript **nested** under `subagents/workflows/<runId>/`; older
+builds (and all regular sub-agents) write it **flat** under `subagents/`. Both
+layouts are resolved on read — see "Reading full agent text in the UI" below.
+
+### The terminal-journal constraint
+
+`wf_<runId>.json` is written **only when the workflow finishes**. While a run
+is in flight, its live state lives in a per-run dir
+`subagents/workflows/<runId>/`: a streaming `journal.jsonl` (a `started` /
+`result` event per inner agent) and the growing `agent-<id>.jsonl` transcripts.
+The ingester handles both phases:
+
+- **Completed runs** are ingested in full from the terminal journal: a
+  `workflows` row (keyed by `run_id`) plus linked inner-agent rows, with phases
+  and per-agent labels.
+- **Running runs** (no terminal journal yet) are ingested **live** by
+  `ingestLiveWorkflow`: it reads `journal.jsonl` for each agent's started/done
+  state + result, and parses the live `agent-<id>.jsonl` transcripts (via
+  `parseSubagentFile`) for real-time per-agent tokens, tool calls, duration, and
+  model. It synthesizes a `progress[]` so the UI shows live activity
+  (phase/label aren't known until the terminal journal lands). The run is
+  `status: running` and **replaced by the terminal journal on completion**
+  (idempotent upsert by `run_id`; launch time preserved). A launch script with
+  no run dir yet falls back to a minimal `running` row.
+
+### Ingestion module and triggers
+
+`server/lib/workflow-ingest.js` (`ingestWorkflowsForSession`) reuses the
+import pipeline's `parseSubagentFile` and `importSubagentFromJsonl`, so inner
+agents become agent rows under the **same** `${sessionId}-jsonl-<agentId>` id
+scheme the subagent importer already uses — ingestion therefore **converges**
+with any prior subagent import (no duplicate rows). Each inner agent is stamped
+with `agents.workflow_run_id` + `agents.workflow_phase`. The per-agent table in
+the UI is read from the journal's `progress[]` JSON.
+
+**Cost folding.** Inner agents are sidechain contexts whose token usage is NOT
+in the parent transcript (the same reason `combineSessionTokens` *adds*
+subagent tokens). So the fleet's real token split — parsed from each
+`agent-<id>.jsonl` — is written into the session's `token_usage` under a
+namespaced `service_tier = 'workflow'` bucket. That bucket is isolated from the
+main-transcript writer's rows (which use the real tier), so the two never
+collide or clobber, while `calculateCost` still sums them per model. The write
+is a full recompute each ingest → `replaceTokenUsage`'s replace semantics make
+it idempotent (no double-count across re-ingests).
+
+Ingestion runs from four fail-safe, off-the-response-path triggers:
+
+1. **Live** — `routes/hooks.js`, on `Stop` / `SubagentStop` / `SessionEnd`
+   (the lifecycle hooks that bracket a workflow finishing).
+2. **Real-time poll** — `startWorkflowPoll` (`server/index.js`) scans active
+   sessions every ~12 s, skipping any whose workflow artifacts are unchanged.
+   The newest-mtime fingerprint (`workflowsMaxMtime`) includes the **live**
+   `journal.jsonl` + `agent-*.jsonl` of any in-flight run (bounded to runs
+   without a terminal journal), so the poll re-ingests as a running workflow's
+   tokens/tools/agents grow — the UI updates live without waiting for a hook or
+   completion. Tunable via `DASHBOARD_WORKFLOW_POLL_MS` (0 disables).
+3. **Periodic** — the `server/index.js` maintenance sweep, scanning active
+   sessions' `workflows/` directories (flips `running` → `completed` when a
+   journal lands without a subsequent hook).
+4. **Backfill** — a one-time pass in `autoImportLegacySessions` ingests
+   historical on-disk workflows for every recorded session.
+
+Each ingest that changes anything broadcasts `workflow_upserted` and a
+`session_updated` (so the cost views refetch) over WebSocket. Runs surface via
+`GET /api/workflows/runs` (list) and `GET /api/workflows/runs/:runId` (detail
+with linked agents + events), and are attached to the launching session via the
+`workflows[]` field on `GET /api/sessions/:id`. The UI shows them in a
+"Workflow Runs" panel on the Workflows page and a subsection on Session Detail.
+
+### Reading full agent text in the UI
+
+The run journal only carries **truncated** `promptPreview` / `resultPreview`
+strings (Claude Code truncates them with a trailing `…`), so the panel alone can
+never show an inner agent's complete prompt or result. The full text lives in the
+per-agent `agent-<agentId>.jsonl` transcript, which the dashboard surfaces
+on demand:
+
+- **Dual-layout resolution.** `server/lib/claude-home.js` exposes
+  `resolveAgentTranscriptInDir(subagentsDir, agentId, runId?)`, used by all three
+  sub-agent path resolvers (`getSubagentTranscriptPath`,
+  `findSubagentTranscriptPath`, `getSnapshotSubagentTranscriptPath`). It checks
+  the **flat** path first (so regular sub-agents resolve exactly as before), then
+  the **nested** `workflows/<runId>/` path. When `runId` is known the run dir is
+  read directly; when it is unknown the nested tree is scanned and a match is
+  returned only if **exactly one** run contains that `agentId` — an ambiguous id
+  across runs resolves to `null` rather than guessing.
+- **`run_id` query param.** `GET /api/sessions/:id/transcript` accepts an
+  optional `run_id=wf_<…>` alongside `agent_id`, threaded into the resolver chain
+  so a workflow inner agent's nested transcript is found deterministically. The
+  endpoint shape is unchanged; the param is additive.
+- **Lazy fetch on expand.** The Workflow Runs panel
+  (`client/src/components/workflows/WorkflowRunsPanel.tsx`) fetches the transcript
+  the first time a result row is expanded (deduped per `${run_id}::${agentId}`),
+  derives prompt + result via `extractPromptResult`, and renders the full text —
+  falling back to the journal teaser while loading, on error, or for schema-mode
+  agents whose final turn is a tool call rather than text. Nothing is eagerly
+  ingested into the DB. "Full text" means the complete message body up to the
+  endpoint's per-message 10,240-char cap (`limit` ≤ 200 messages).
+- **Durable snapshot.** The snapshot writer (`snapshotTranscript` in
+  `scripts/import-history.js`) preserves nested workflow transcripts via the
+  dedicated `findSessionWorkflowSubagents` discovery — mirroring the live
+  `subagents/workflows/<runId>/` subpath into the snapshot dir — so the full text
+  still resolves after Claude Code prunes the live files under its
+  `cleanupPeriodDays` retention. This is kept **separate** from
+  `findSessionSubagents` (flat sub-agents) so the regular sub-agent import path is
+  unchanged and nested inner-agents are never double-counted.
+
+### Schema
+
+A `workflows` table (`run_id` PK, `session_id` FK `ON DELETE CASCADE`, status
+as an open string, `phases`/`progress` as JSON blobs, `source` = `journal` |
+`live`) plus two additive `agents` columns (`workflow_run_id`,
+`workflow_phase`). No existing table, response shape, or WebSocket message type
+changes.
 
 ---
 
@@ -1596,7 +1843,7 @@ Cache versioning is controlled by the `CACHE_NAME` constant (`dashboard-v2`). On
 
 `client/src/main.tsx` snapshots `navigator.serviceWorker.controller` before registration and listens for `controllerchange`: when a new SW activates on an already-controlled page, it reloads exactly once so the page picks up the new asset URLs without a hard refresh. The first install (no previous controller) does **not** reload.
 
-These behaviors are reinforced by explicit `Cache-Control` headers from the production Express static middleware in `server/index.js`: `immutable, max-age=31536000` for `/assets/*`; `no-cache, must-revalidate` for `index.html`, `sw.js`, and `manifest.json`; a short revalidation window for other static files. The SPA fallback `sendFile` sends the same `no-cache` header. The macOS desktop shell loads the dashboard from this same in-process server (`NODE_ENV=production`), so it inherits the policy automatically.
+These behaviors are reinforced by explicit `Cache-Control` headers from the production Express static middleware in `server/index.js`: `immutable, max-age=31536000` for `/assets/*`; `no-cache, must-revalidate` for `index.html`, `sw.js`, and `manifest.json`; a short revalidation window for other static files. The SPA fallback `sendFile` sends the same `no-cache` header. The native desktop shell (macOS and Windows) loads the dashboard from this same in-process server (`NODE_ENV=production`), so it inherits the policy automatically.
 
 ---
 
@@ -1898,11 +2145,11 @@ For the extension source code, refer to the [vscode-extension/](./vscode-extensi
 
 ---
 
-## Desktop App Architecture (macOS / Electron)
+## Desktop App Architecture (macOS & Windows / Electron)
 
-The `desktop/` workspace ships the dashboard as a native macOS application (`Claude Code Monitor.app`, distributed as a `.dmg`). It is an Electron shell that **embeds the existing Express server in-process** and renders the already-built React client in a `BrowserWindow`. The desktop app does not reimplement the dashboard -- it `require()`s `server/index.js` directly, in the same Node runtime as the Electron main process, and points a Chromium window at it.
+The `desktop/` workspace ships the dashboard as a **native desktop app** for **macOS** (`Claude Code Monitor.app`, distributed as a `.dmg`) **and Windows** (`Claude Code Monitor.exe`, distributed as an NSIS installer plus a no-install portable build). It is an Electron shell that **embeds the existing Express server in-process** and renders the already-built React client in a `BrowserWindow`. The desktop app does not reimplement the dashboard -- it `require()`s `server/index.js` directly, in the same Node runtime as the Electron main process, and points a Chromium window at it.
 
-For the user-facing guide (download, install, Gatekeeper, tray menu, auto-start), see [DESKTOP.md](./DESKTOP.md). For the full contributor/architecture reference -- including build performance, code signing, notarization, and CI details -- see [desktop/README.md](./desktop/README.md).
+For the user-facing guide (download, install, Gatekeeper / SmartScreen, tray menu, auto-start), see [DESKTOP.md](./DESKTOP.md). For the full contributor/architecture reference -- including build performance, code signing, notarization, and CI details -- see [desktop/README.md](./desktop/README.md).
 
 ### Workspace Position
 
@@ -1973,11 +2220,12 @@ flowchart LR
 | --- | --- |
 | **`main.ts`** | Main-process entry. Single-instance lock, app menu + tray wiring, dashboard window, `Restart Server`, lifecycle (`window-all-closed`, `before-quit`). |
 | **`server-host.ts`** | In-process Express boot: port discovery, adoption, `better-sqlite3` ABI patch, `startBackgroundServices()` + hook bootstrap, clean DB close. Returns a `ServerHandle`. |
-| **`window.ts`** | `BrowserWindow` with persisted geometry (`userData/window-state.json`). External links open in the system browser. |
-| **`menu.ts` / `tray.ts`** | Native application menu and menu-bar (tray) icon. Tray uses a single-click dropdown (left or right) with a **live status snapshot** queried straight from SQLite at click time — server port, active sessions, working agents, events today — followed by *Open Dashboard* (⌘O), *Open in Browser*, *Restart Server*, *Show Logs*, *Open at Login* (toggle), and *Quit*. The menu is rebuilt on each open so every value stays current. Snapshot rows are enabled and click-to-open-dashboard rather than disabled (which the OS dims). |
-| **`login-item.ts`** | macOS Login Items toggle via Electron's first-party `app.setLoginItemSettings` (wraps `SMAppService`) -- not a `LaunchAgent` plist. |
-| **`shell-path.ts`** | Recovers the user's login-shell `PATH` at startup and merges it onto `process.env.PATH`, so the embedded server (and the `claude` CLI it spawns) is not limited to launchd's minimal `PATH`. |
-| **`logger.ts`** | File logger to `~/Library/Logs/Claude Code Monitor/desktop.log` (the main process has no console when launched from Finder). |
+| **`window.ts`** | `BrowserWindow` with persisted geometry (`userData/window-state.json`). External links open in the system browser. Sets the window/taskbar `icon` to the colored app logo (`assets/icon.ico` on Windows, `icon.png` elsewhere) so an unpackaged `desktop:dev` run no longer shows the generic Electron icon. |
+| **`menu.ts` / `tray.ts`** | Native application menu and menu-bar / notification-area (tray) icon. `tray.ts` selects a platform tray image — a macOS template glyph that the OS tints for the menu bar, or the colored `assets/icon.ico` for the Windows notification area (a black template would vanish on the dark taskbar). Tray uses a single-click dropdown (left or right) with a **live status snapshot** queried straight from SQLite at click time — server port, active sessions, working agents, events today — followed by *Open Dashboard*, *Open in Browser*, *Restart Server*, *Show Logs*, *Open at Login* (toggle), and *Quit*. The menu is rebuilt on each open so every value stays current. Snapshot rows are enabled and click-to-open-dashboard rather than disabled (which the OS dims). The application menu's *File ▸ Open Dashboard* (⌘1) is **macOS-only** — there the global menu bar persists after the window hides; on Windows/Linux the window-attached menu can't reopen a hidden window, so reopening is the tray's job. `focusOrCreateWindow` calls `show()` unconditionally so the tray reliably raises a backgrounded/minimized window (a bare `focus()` on Windows often only flashes the taskbar). |
+| **`login-item.ts`** | Auto-start-at-login toggle through Electron's first-party `app.setLoginItemSettings` API on every platform. On macOS it drives the modern `SMAppService` Login Items (not a `LaunchAgent` plist); on Windows it writes a per-user `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` entry. Login launches are tagged with a `--ccam-hidden` arg so the app can stay tray-only at startup — Windows has no `wasOpenedAtLogin` signal, so the arg is the cross-platform detection mechanism. |
+| **`shell-path.ts`** | (macOS) Recovers the user's login-shell `PATH` at startup and merges it onto `process.env.PATH`, so the embedded server (and the `claude` CLI it spawns) is not limited to launchd's minimal `PATH`. On Windows the process already inherits the full user `PATH`, so no recovery is needed. |
+| **`logger.ts`** | File logger to `~/Library/Logs/Claude Code Monitor/desktop.log` (macOS) or `%APPDATA%\Claude Code Monitor\logs\desktop.log` (Windows) -- the main process has no console when launched from Finder / Explorer. |
+| **`constants.ts`** | Shared identifiers, including the `APP_ID` (`com.hoangsonww.ccam.desktop`) that `main.ts` sets as the Windows AppUserModelId. |
 
 `server-host.ts` resolves the directory containing the bundled `server/` and `client/dist/` via `resolveAppRoot()`: `process.resourcesPath/app` when packaged, or the repo root (one directory up from `desktop/`) in development.
 
@@ -2029,26 +2277,30 @@ Port preference order is **4820 → 4821–4829 → a random port in 49152–495
 
 ### Writable Data Directory
 
-A packaged `.app` bundle is **read-only**: once installed under `/Applications`, code-signed, or run through macOS **app translocation**, `Resources/app/` cannot be written to. The dashboard's SQLite database and the VAPID keypair (`server/lib/push.js`) are writable state, so they must not live inside the bundle. Before booting the embedded server, `server-host.ts` creates `app.getPath('userData')/data` and points the server at it via the `DASHBOARD_DATA_DIR` environment variable:
+A packaged install directory is **read-only** in practice: on macOS a `.app` bundle installed under `/Applications`, code-signed, or run through **app translocation** cannot write to `Resources/app/`, and on Windows the NSIS install dir under `%ProgramFiles%` (or the read-only mount a portable build runs from) is no place for mutable state. The dashboard's SQLite database and the VAPID keypair (`server/lib/push.js`) are writable state, so they must not live inside the bundle / install dir. Before booting the embedded server, `server-host.ts` creates `app.getPath('userData')/data` and points the server at it via the `DASHBOARD_DATA_DIR` environment variable:
 
 - `server/db.js` honors `DASHBOARD_DATA_DIR` for the SQLite file.
 - `server/lib/push.js` honors it for the persisted VAPID keys.
 
-The resulting location is `~/Library/Application Support/Claude Code Monitor/data/`. Because this lives outside the bundle, imported history and persisted events **survive an app reinstall or update**. Without this, writing a database into `Resources/app/` failed on a packaged build and broke History Import and event persistence.
+The resulting per-user location is `~/Library/Application Support/Claude Code Monitor/data/` on macOS and `%APPDATA%\Claude Code Monitor\data\` on Windows. Because this lives outside the bundle / install dir, imported history and persisted events **survive an app reinstall or update** (the Windows NSIS uninstaller keeps this data by default). Without this, writing a database into the read-only install location failed on a packaged build and broke History Import and event persistence.
 
 The standalone `node server/index.js` path is **unaffected**: `DASHBOARD_DATA_DIR` is unset there, and `server-host.ts` only sets it when it is not already defined -- so `server/db.js` falls back to its usual repo-relative default.
 
-### Shell `PATH` Recovery
+### Shell `PATH` Recovery (macOS)
 
-A macOS app launched from Finder, the Dock, or Login Items auto-start is spawned by `launchd`, which hands it a **minimal `PATH`** (roughly `/usr/bin:/bin:/usr/sbin:/sbin`) and does **not** source the user's shell profile. The dashboard's "Run Claude" feature (`server/routes/run.js`, `server/lib/run-spawner.js`) spawns the `claude` CLI, which is almost always installed somewhere only the shell `PATH` knows about (`/opt/homebrew/bin`, `~/.local/bin`, `~/.claude/local`, a Node version-manager's bin dir). Under launchd's `PATH`, `claude` cannot be resolved or spawned.
+This step is **macOS-only**. A macOS app launched from Finder, the Dock, or Login Items auto-start is spawned by `launchd`, which hands it a **minimal `PATH`** (roughly `/usr/bin:/bin:/usr/sbin:/sbin`) and does **not** source the user's shell profile. The dashboard's "Run Claude" feature (`server/routes/run.js`, `server/lib/run-spawner.js`) spawns the `claude` CLI, which is almost always installed somewhere only the shell `PATH` knows about (`/opt/homebrew/bin`, `~/.local/bin`, `~/.claude/local`, a Node version-manager's bin dir). Under launchd's `PATH`, `claude` cannot be resolved or spawned.
 
 `shell-path.ts` repairs this **before the server boots**: at startup it runs the user's login+interactive shell once (`$SHELL -ilc`, so `.zprofile`/`.zshrc` are sourced), captures the resulting `PATH` between sentinel markers, and merges it -- plus a fallback list of common CLI install directories -- onto `process.env.PATH`. The merge is order-preserving and deduplicated, so it is idempotent. Because the embedded server runs in the same process, it and every `claude` it spawns inherit the corrected `PATH`. (A `claude` shell _alias_ or _function_ still cannot be spawned -- only a real executable on the `PATH` can.)
+
+On **Windows** there is no equivalent step: a process launched from Explorer, the Start menu, or the `HKCU\…\Run` startup entry already inherits the full user `PATH`, so the embedded server can resolve `claude` directly.
 
 ### `better-sqlite3` Native-Module Handling
 
 `better-sqlite3` is the only **native** module in the dependency tree, and a native module must be compiled against the exact Node ABI it runs on. The repo-root copy is built for the **system Node** (so `npm run test:server` works for contributors); Electron ships its **own Node ABI**.
 
 The desktop workspace solves this without disturbing the root install: the desktop workspace has its own `better-sqlite3`, rebuilt for Electron's Node ABI by `electron-builder install-app-deps` (run in its `postinstall`). `server-host.ts` then installs a one-time, **process-local** patch to `Module._resolveFilename` that redirects `require("better-sqlite3")` -- from anywhere in the embedded server -- to that ABI-correct copy.
+
+Desktop setup is **guarded** so a missing or unbuilt binary never escapes as a raw node-gyp trace or a runtime crash: `desktop/scripts/preflight.js` (shared by `install.js` and `prebuild.js`) verifies the Electron-ABI binary exists and, when it doesn't, prints actionable, copy-pasteable setup help -- the per-OS C++ toolchain prerequisites (or a no-toolchain alternative that fetches Electron's prebuilt binary directly) -- before exiting non-zero. `desktop:install` runs this on install; the `prebuild` gate enforces it before every `desktop:*` build, turning a would-be runtime failure into a build-time error.
 
 ```mermaid
 flowchart TD
@@ -2102,7 +2354,7 @@ flowchart LR
 `bootstrapOwnedServer()` runs **once** -- guarded by a module-level flag so a `Restart Server` does not double-register schedulers or watchers -- and:
 
 1. Calls `startBackgroundServices()` -- the update scheduler, the `cc-watcher` config watcher, and one-time orphaned-run reconciliation.
-2. Calls `installHooks()` -- writes the Claude Code hook configuration to `~/.claude/settings.json`, so a DMG-only user gets events flowing without ever running `npm run install-hooks` from a checkout.
+2. Calls `installHooks()` -- writes the Claude Code hook configuration to `~/.claude/settings.json`, so an install-only user (DMG on macOS, `.exe` on Windows) gets events flowing without ever running `npm run install-hooks` from a checkout.
 
 It runs only when the server is **owned** by the app -- an adopted server has already done its own bootstrap.
 
@@ -2111,18 +2363,18 @@ It runs only when the server is **owned** by the app -- an adopted server has al
 ```mermaid
 sequenceDiagram
     autonumber
-    participant OS as macOS
+    participant OS as macOS / Windows
     participant Main as main.ts
     participant Host as server-host.ts
     participant Srv as server/index.js
     participant UI as BrowserWindow
 
     OS->>Main: launch app
-    Main->>Main: requestSingleInstanceLock()
+    Main->>Main: setAppUserModelId (win32) · requestSingleInstanceLock()
     alt lock not acquired
         Main->>OS: exit(0) — focus existing instance
     end
-    Main->>Host: ensureUserPath() — recover login-shell PATH
+    Main->>Host: ensureUserPath() — recover login-shell PATH (macOS only)
     Main->>Host: startEmbeddedServer()
     Host->>Host: probe :4820 — adopt if a healthy server answers
     alt no server to adopt
@@ -2133,34 +2385,36 @@ sequenceDiagram
     end
     Host-->>Main: ServerHandle { url, port, ownedByUs, stop }
     Main->>Main: installApplicationMenu() · createTray()
-    alt launched at login
-        Main->>OS: stay tray-only, hide dock
+    alt launched at login (--ccam-hidden / wasOpenedAtLogin)
+        Main->>OS: stay tray-only, hide dock (macOS)
     else normal launch
         Main->>UI: createDashboardWindow(url)
         UI->>Srv: GET http://127.0.0.1:port
     end
     Note over Main: window "close" → hide (server keeps running)
+    Note over Main: ⌘Q / Ctrl+Q → confirm (second press bypasses)
     Note over Main: before-quit → stop owned server + closeEmbeddedDatabase()
 ```
 
 | Event | Behavior |
 | --- | --- |
-| **Second launch** | `requestSingleInstanceLock()` fails -- the new process exits and the existing window is focused. |
+| **Second launch** | `requestSingleInstanceLock()` (enabled on **every platform**) fails -- the new process exits and the existing window is focused. |
 | **Window close** | Intercepted -- the window **hides** (`hide()`); the server and tray keep running. |
 | **`window-all-closed`** | App stays alive in tray-only mode (the handler is intentionally a no-op). |
-| **Launched at login** | The dashboard window is **not** shown -- only the tray icon (`openAsHidden`, dock hidden). |
+| **Launched at login** | The dashboard window is **not** shown -- only the tray icon. Detected via macOS `wasOpenedAtLogin` (dock hidden, `openAsHidden`) or, on Windows, the `--ccam-hidden` arg written into the `HKCU\…\Run` startup command. |
+| **Quit shortcut** | ⌘Q (macOS) / Ctrl+Q (Windows) shows a confirmation dialog; a second press bypasses it. |
 | **`before-quit`** | If the server is owned: stop the HTTP server, then `closeEmbeddedDatabase()` for a clean WAL checkpoint, then `app.exit(0)`. The DB handle is closed here -- never on `Restart Server`, where the cached `server/db.js` singleton must stay usable. |
 
 ### Packaged App Layout
 
-`electron-builder` produces `Claude Code Monitor.app`. The Electron main-process code is compiled (`tsc` → `out/`) and packed into `app.asar`; the rest of the repo is shipped as **`extraResources`** -- plain files under `Resources/app/`.
+`electron-builder` produces `Claude Code Monitor.app` on macOS and `Claude Code Monitor.exe` (NSIS installer + portable) on Windows. On both platforms the Electron main-process code is compiled (`tsc` → `out/`) and packed into `app.asar`; the rest of the repo is shipped as **`extraResources`** -- plain files under the bundle's `Resources/app/` (macOS) or the install dir's `resources\app\` (Windows). The internal layout is the same shape on both:
 
 ```mermaid
 flowchart TD
-    appbundle["Claude Code Monitor.app"]
-    appbundle --> contents["Contents/"]
-    contents --> macos["MacOS/ — Electron binary"]
-    contents --> res["Resources/"]
+    appbundle["Claude Code Monitor.app (macOS)<br/>Claude Code Monitor install dir (Windows)"]
+    appbundle --> contents["Contents/ (macOS)<br/>install root (Windows)"]
+    contents --> macos["MacOS/ — Electron binary (macOS)<br/>Claude Code Monitor.exe (Windows)"]
+    contents --> res["Resources/ (macOS)<br/>resources\ (Windows)"]
     res --> asar["app.asar<br/>(compiled out/**, package.json)"]
     res --> unpacked["app.asar.unpacked/<br/>node_modules/better-sqlite3 (.node)"]
     res --> appdir["app/"]
@@ -2174,9 +2428,9 @@ flowchart TD
     style appdir fill:#238636,stroke:#196c2e,color:#fff
 ```
 
-At runtime `server-host.ts` resolves this root as `process.resourcesPath/app` when packaged. Everything under `Resources/app/` is **read-only** on a packaged, signed, or app-translocated bundle -- so all writable state (the SQLite database, VAPID keys) lives in `~/Library/Application Support/Claude Code Monitor/data/`, **never inside the bundle** (see [Writable Data Directory](#writable-data-directory)).
+At runtime `server-host.ts` resolves this root as `process.resourcesPath/app` when packaged, on both platforms. Everything under the packaged `app/` is **read-only** on a packaged, signed, or app-translocated macOS bundle and on a Windows install under `%ProgramFiles%` (or a portable build's mount) -- so all writable state (the SQLite database, VAPID keys) lives in the per-user data dir (`~/Library/Application Support/Claude Code Monitor/data/` on macOS, `%APPDATA%\Claude Code Monitor\data\` on Windows), **never inside the bundle / install dir** (see [Writable Data Directory](#writable-data-directory)).
 
-`electron-builder` produces a **universal** (x64 + arm64) DMG, ad-hoc signed by default so anyone can build a working `.dmg` without a paid Apple Developer account; real Developer ID signing and notarization are opt-in via environment variables (`CSC_LINK`, `APPLE_ID`, etc.). CI runs a path-filtered `🍎 macOS Desktop (DMG)` job on `macos-latest`. The `desktop/scripts/prebuild.js` guard also **self-heals** a `better-sqlite3` native binary that a prior cross-arch DMG build (`electron-builder --mac --x64/--arm64`) left compiled for the wrong CPU architecture -- it detects the mismatch via `file` and re-runs `electron-builder install-app-deps`, so `desktop:dev` and `desktop:test` do not fail with `ERR_DLOPEN_FAILED`. See [`desktop/README.md`](./desktop/README.md) for the full build pipeline, build-performance notes, and signing details.
+On macOS `electron-builder` produces a **universal** (x64 + arm64) DMG (plus single-arch `arm64` / `x64` DMGs), ad-hoc signed by default so anyone can build a working `.dmg` without a paid Apple Developer account; real Developer ID signing and notarization are opt-in via environment variables (`CSC_LINK`, `APPLE_ID`, etc.). On Windows it produces an **NSIS installer `.exe`** and a **no-install portable `.exe`** (both x64), using `assets/icon.ico` (generated from the source PNG by `desktop/scripts/build-win-icon.ps1`) as the application and tray icon. **`electron-builder` packages for the host OS** -- DMGs build on macOS, Windows `.exe`s build on Windows -- so the two artifacts come from two CI jobs (see below). The `desktop/scripts/prebuild.js` guard also **self-heals** a `better-sqlite3` native binary that a prior cross-arch DMG build (`electron-builder --mac --x64/--arm64`) left compiled for the wrong CPU architecture -- it detects the mismatch via `file` and re-runs `electron-builder install-app-deps`, so `desktop:dev` and `desktop:test` do not fail with `ERR_DLOPEN_FAILED`; on Windows it shells the `.cmd` shims for `npm`/`npx`. CI runs a path-filtered `🍎 macOS Desktop (DMG)` job on `macos-latest` (artifact `ClaudeCodeMonitor-dmg`) and a `🪟 Windows Desktop (EXE)` job on `windows-latest` (artifact `ClaudeCodeMonitor-win`); the release attaches both. See [`desktop/README.md`](./desktop/README.md) for the full build pipeline, build-performance notes, and signing details.
 
 ### Relation to Standalone Deployment
 
@@ -2269,13 +2523,13 @@ graph LR
 | **File watching** | `node --watch` + Vite HMR            | None                            |
 | **Source maps**   | Inline                               | External files                  |
 
-### Desktop App (macOS)
+### Desktop App (macOS & Windows)
 
-The native macOS app is a self-contained deployment mode: a single Electron process embeds the Express server in-process and renders the React client in a `BrowserWindow`. No terminal, no separate `npm start`.
+The native desktop app (macOS `.app`/`.dmg`, Windows NSIS / portable `.exe`) is a self-contained deployment mode: a single Electron process embeds the Express server in-process and renders the React client in a `BrowserWindow`. No terminal, no separate `npm start`.
 
 ```mermaid
 graph LR
-    LAUNCH["Open Claude Code Monitor.app"] --> MAIN["Electron main process<br/>(Node 22 / Electron 35)"]
+    LAUNCH["Open Claude Code Monitor<br/>(.app / .exe)"] --> MAIN["Electron main process<br/>(Node 22 / Electron 35)"]
     MAIN --> HOST["server-host.ts<br/>port discovery + adopt"]
     HOST --> SERVER["server/index.js (in-process)<br/>Port 4820 → fallback"]
     SERVER -->|serves| DIST["client/dist/<br/>(extraResources)"]
@@ -2287,7 +2541,7 @@ graph LR
     style DIST fill:#646CFF,stroke:#818cf8,color:#fff
 ```
 
-The hook ingestion path (Claude Code hooks → `POST /api/hooks/event` → SQLite → WebSocket) is **identical to the standalone Production path** -- only the process that hosts the server differs. See [Desktop App Architecture](#desktop-app-architecture-macos--electron) for the full design.
+The hook ingestion path (Claude Code hooks → `POST /api/hooks/event` → SQLite → WebSocket) is **identical to the standalone Production path** -- only the process that hosts the server differs. See [Desktop App Architecture](#desktop-app-architecture-macos--windows--electron) for the full design.
 
 ### MCP Sidecar (Optional)
 

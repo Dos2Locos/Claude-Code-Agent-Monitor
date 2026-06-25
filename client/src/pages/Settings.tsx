@@ -46,6 +46,10 @@ import {
   Settings as SettingsIcon,
   FolderOpen,
   Info,
+  Cat,
+  History,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { api } from "../lib/api";
 import { eventBus } from "../lib/eventBus";
@@ -55,7 +59,27 @@ import { subscribeToPush, unsubscribeFromPush } from "../lib/push";
 import { Tip } from "../components/Tip";
 import { ImportHistory } from "../components/ImportHistory";
 import { Skeleton } from "../components/Skeleton";
+import { AlertsNotifications } from "../components/AlertsNotifications";
 import type { ModelPricing, WSMessage } from "../lib/types";
+
+// In-page navigation for the (dense) Settings screen. Each entry maps to a
+// `<section id>` rendered below; the TOC scroll-spies the active one.
+const SETTINGS_SECTIONS: {
+  id: string;
+  labelKey: string;
+  fallback?: string;
+  Icon: typeof DollarSign;
+}[] = [
+  { id: "pricing", labelKey: "pricing.title", Icon: DollarSign },
+  { id: "hooks", labelKey: "hooks.title", Icon: Plug },
+  { id: "claude-home", labelKey: "claudeHome.title", Icon: FolderOpen },
+  { id: "import", labelKey: "import.title", fallback: "Import", Icon: History },
+  { id: "tabby", labelKey: "tabby.title", fallback: "Tabby", Icon: Cat },
+  { id: "notifications", labelKey: "notifications.title", Icon: Bell },
+  { id: "alerts", labelKey: "alertsHub.title", Icon: BellRing },
+  { id: "data", labelKey: "data.title", Icon: Database },
+  { id: "about", labelKey: "about.title", Icon: Server },
+];
 
 // ─── Notification preferences ───
 
@@ -100,6 +124,9 @@ interface EditRow {
   output_per_mtok: string;
   cache_read_per_mtok: string;
   cache_write_per_mtok: string;
+  cache_write_1h_per_mtok: string;
+  fast_input_per_mtok: string;
+  fast_output_per_mtok: string;
 }
 
 const emptyRow: EditRow = {
@@ -109,6 +136,9 @@ const emptyRow: EditRow = {
   output_per_mtok: "0",
   cache_read_per_mtok: "0",
   cache_write_per_mtok: "0",
+  cache_write_1h_per_mtok: "0",
+  fast_input_per_mtok: "0",
+  fast_output_per_mtok: "0",
 };
 
 interface SystemInfo {
@@ -350,9 +380,63 @@ export function Settings() {
   const [claudeHomeInput, setClaudeHomeInput] = useState("");
   const [claudeHomeSaving, setClaudeHomeSaving] = useState(false);
   const [claudeHomeError, setClaudeHomeError] = useState<string | null>(null);
+  const [activeSection, setActiveSection] = useState<string>("pricing");
+  const tocRef = useRef<HTMLDivElement | null>(null);
+  const [tocOverflow, setTocOverflow] = useState({ left: false, right: false });
 
   const wsConnected = useSyncExternalStore(eventBus.onConnection, () => eventBus.connected);
   const animatedTotalCost = useCountUp(totalCost);
+
+  // Scroll-spy: highlight the TOC entry for the section nearest the top.
+  useEffect(() => {
+    if (loading) return;
+    const els = SETTINGS_SECTIONS.map((s) => document.getElementById(s.id)).filter(
+      (e): e is HTMLElement => !!e
+    );
+    if (els.length === 0) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible[0]) setActiveSection(visible[0].target.id);
+      },
+      { rootMargin: "-88px 0px -65% 0px", threshold: 0 }
+    );
+    els.forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  }, [loading]);
+
+  // Show chevron affordances on the TOC when its chips overflow horizontally.
+  const recomputeTocOverflow = useCallback(() => {
+    const el = tocRef.current;
+    if (!el) return;
+    const left = el.scrollLeft > 1;
+    const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
+    setTocOverflow((prev) => (prev.left === left && prev.right === right ? prev : { left, right }));
+  }, []);
+
+  useEffect(() => {
+    if (loading) return;
+    recomputeTocOverflow();
+    const el = tocRef.current;
+    if (!el) return;
+    const onScroll = () => recomputeTocOverflow();
+    el.addEventListener("scroll", onScroll, { passive: true });
+    const ro =
+      typeof ResizeObserver !== "undefined" ? new ResizeObserver(recomputeTocOverflow) : null;
+    ro?.observe(el);
+    window.addEventListener("resize", recomputeTocOverflow);
+    return () => {
+      el.removeEventListener("scroll", onScroll);
+      ro?.disconnect();
+      window.removeEventListener("resize", recomputeTocOverflow);
+    };
+  }, [loading, recomputeTocOverflow]);
+
+  const scrollTocBy = useCallback((delta: number) => {
+    tocRef.current?.scrollBy({ left: delta, behavior: "smooth" });
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -439,6 +523,9 @@ export function Settings() {
       output_per_mtok: String(rule.output_per_mtok),
       cache_read_per_mtok: String(rule.cache_read_per_mtok),
       cache_write_per_mtok: String(rule.cache_write_per_mtok),
+      cache_write_1h_per_mtok: String(rule.cache_write_1h_per_mtok),
+      fast_input_per_mtok: String(rule.fast_input_per_mtok),
+      fast_output_per_mtok: String(rule.fast_output_per_mtok),
     });
   };
 
@@ -469,6 +556,9 @@ export function Settings() {
         output_per_mtok: parseFloat(editRow.output_per_mtok) || 0,
         cache_read_per_mtok: parseFloat(editRow.cache_read_per_mtok) || 0,
         cache_write_per_mtok: parseFloat(editRow.cache_write_per_mtok) || 0,
+        cache_write_1h_per_mtok: parseFloat(editRow.cache_write_1h_per_mtok) || 0,
+        fast_input_per_mtok: parseFloat(editRow.fast_input_per_mtok) || 0,
+        fast_output_per_mtok: parseFloat(editRow.fast_output_per_mtok) || 0,
       });
       setEditingPattern(null);
       setAdding(false);
@@ -634,6 +724,36 @@ export function Settings() {
         />
       </td>
       <td className="px-4 py-3">
+        <input
+          type="number"
+          step="0.01"
+          min="0"
+          value={editRow.cache_write_1h_per_mtok}
+          onChange={(e) => setEditRow((r) => ({ ...r, cache_write_1h_per_mtok: e.target.value }))}
+          className="input w-full text-sm text-right font-mono"
+        />
+      </td>
+      <td className="px-4 py-3">
+        <input
+          type="number"
+          step="0.01"
+          min="0"
+          value={editRow.fast_input_per_mtok}
+          onChange={(e) => setEditRow((r) => ({ ...r, fast_input_per_mtok: e.target.value }))}
+          className="input w-full text-sm text-right font-mono"
+        />
+      </td>
+      <td className="px-4 py-3">
+        <input
+          type="number"
+          step="0.01"
+          min="0"
+          value={editRow.fast_output_per_mtok}
+          onChange={(e) => setEditRow((r) => ({ ...r, fast_output_per_mtok: e.target.value }))}
+          className="input w-full text-sm text-right font-mono"
+        />
+      </td>
+      <td className="px-4 py-3">
         <div className="flex items-center gap-1">
           <button
             onClick={saveEdit}
@@ -743,6 +863,58 @@ export function Settings() {
         </div>
       </div>
 
+      {/* In-page section navigation - Settings is dense, so this TOC jumps to
+          and scroll-spies each section. */}
+      <nav className="sticky top-0 z-20 -mx-1 !mt-2 px-1 py-2 bg-surface-0/85 backdrop-blur border-b border-border/60 flex items-center gap-1.5">
+        <span className="flex-shrink-0 pl-1 text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+          {t("jumpTo", "Jump to")}
+        </span>
+        {tocOverflow.left && (
+          <button
+            type="button"
+            onClick={() => scrollTocBy(-180)}
+            aria-label="Scroll left"
+            className="flex-shrink-0 flex items-center justify-center w-6 h-7 rounded-md border border-border text-gray-400 hover:text-gray-200 hover:bg-surface-3 transition-colors"
+          >
+            <ChevronLeft className="w-3.5 h-3.5" />
+          </button>
+        )}
+        <div ref={tocRef} className="flex items-center gap-1.5 overflow-x-auto no-scrollbar flex-1">
+          {SETTINGS_SECTIONS.map(({ id, labelKey, fallback, Icon }) => {
+            const active = activeSection === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() =>
+                  document
+                    .getElementById(id)
+                    ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                }
+                className={`inline-flex items-center gap-1.5 text-xs whitespace-nowrap px-2.5 py-1.5 rounded-lg border transition-colors flex-shrink-0 ${
+                  active
+                    ? "bg-accent/15 border-accent/30 text-accent"
+                    : "border-border text-gray-400 hover:text-gray-200 hover:bg-surface-3"
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                {t(labelKey, fallback ?? "")}
+              </button>
+            );
+          })}
+        </div>
+        {tocOverflow.right && (
+          <button
+            type="button"
+            onClick={() => scrollTocBy(180)}
+            aria-label="Scroll right"
+            className="flex-shrink-0 flex items-center justify-center w-6 h-7 rounded-md border border-border text-gray-400 hover:text-gray-200 hover:bg-surface-3 transition-colors"
+          >
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </nav>
+
       {/* Cost summary card */}
       <div className="card p-6">
         <div className="flex items-center justify-between flex-wrap gap-4">
@@ -773,7 +945,7 @@ export function Settings() {
       </div>
 
       {/* ─── MODEL PRICING ─── */}
-      <section>
+      <section id="pricing" className="scroll-mt-24">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div>
             <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2">
@@ -821,7 +993,7 @@ export function Settings() {
         {actionBanner(["reset-pricing"])}
 
         <div className="card overflow-x-auto mt-4">
-          <table className="w-full min-w-[700px]">
+          <table className="w-full min-w-[1000px]">
             <thead>
               <tr className="border-b border-border text-left">
                 <th className="px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
@@ -840,7 +1012,16 @@ export function Settings() {
                   {t("common:token.cacheRead")}
                 </th>
                 <th className="px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wider text-right">
-                  {t("common:token.cacheWrite")}
+                  {t("pricing.cacheWrite5m")}
+                </th>
+                <th className="px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wider text-right">
+                  {t("pricing.cacheWrite1h")}
+                </th>
+                <th className="px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wider text-right">
+                  {t("pricing.fastInput")}
+                </th>
+                <th className="px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wider text-right">
+                  {t("pricing.fastOutput")}
                 </th>
                 <th className="w-24 px-4 py-3 text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
                   {t("common:actions")}
@@ -873,6 +1054,15 @@ export function Settings() {
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-400 text-right font-mono">
                       ${rule.cache_write_per_mtok}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-400 text-right font-mono">
+                      ${rule.cache_write_1h_per_mtok}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-400 text-right font-mono">
+                      {rule.fast_input_per_mtok ? `$${rule.fast_input_per_mtok}` : "-"}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-400 text-right font-mono">
+                      {rule.fast_output_per_mtok ? `$${rule.fast_output_per_mtok}` : "-"}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1 transition-opacity">
@@ -911,7 +1101,7 @@ export function Settings() {
       </section>
 
       {/* ─── HOOK CONFIGURATION ─── */}
-      <section>
+      <section id="hooks" className="scroll-mt-24">
         <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2 mb-1">
           <Plug className="w-4 h-4 text-gray-500" />
           {t("hooks.title")}
@@ -971,7 +1161,7 @@ export function Settings() {
       </section>
 
       {/* ─── CLAUDE HOME ─── */}
-      <section>
+      <section id="claude-home" className="scroll-mt-24">
         <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2 mb-1">
           <FolderOpen className="w-4 h-4 text-gray-500" />
           {t("claudeHome.title")}
@@ -1008,10 +1198,12 @@ export function Settings() {
       </section>
 
       {/* ─── IMPORT HISTORY ─── */}
-      <ImportHistory />
+      <section id="import" className="scroll-mt-24">
+        <ImportHistory />
+      </section>
 
       {/* ─── TABBY COMPANION ─── */}
-      <section>
+      <section id="tabby" className="scroll-mt-24">
         <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2 mb-1">
           <span className="text-base leading-none" aria-hidden>
             🐾
@@ -1049,7 +1241,7 @@ export function Settings() {
       </section>
 
       {/* ─── NOTIFICATIONS ─── */}
-      <section>
+      <section id="notifications" className="scroll-mt-24">
         <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2 mb-1">
           <Bell className="w-4 h-4 text-gray-500" />
           {t("notifications.title")}
@@ -1188,8 +1380,18 @@ export function Settings() {
         </div>
       </section>
 
+      {/* ─── ALERTS ─── */}
+      <section id="alerts" className="scroll-mt-24">
+        <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2 mb-1">
+          <BellRing className="w-4 h-4 text-gray-500" />
+          {t("alertsHub.title")}
+        </h3>
+        <p className="text-xs text-gray-500 mb-4">{t("alertsHub.description")}</p>
+        <AlertsNotifications />
+      </section>
+
       {/* ─── DATA MANAGEMENT ─── */}
-      <section>
+      <section id="data" className="scroll-mt-24">
         <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2 mb-1">
           <Database className="w-4 h-4 text-gray-500" />
           {t("data.title")}
@@ -1382,7 +1584,7 @@ export function Settings() {
       </section>
 
       {/* ─── ABOUT ─── */}
-      <section>
+      <section id="about" className="scroll-mt-24">
         <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2 mb-1">
           <Server className="w-4 h-4 text-gray-500" />
           {t("about.title")}

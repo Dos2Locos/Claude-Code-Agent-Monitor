@@ -23,6 +23,20 @@ const {
 
 const router = Router();
 
+// JSONL entry types the transcript reader turns into renderable messages.
+// `user`/`assistant` are the conversation. `custom-title` is the metadata line
+// written by /rename, `claude -n`, and the picker's Ctrl+R — surfaced as an
+// inline rename marker so a rename is visible even when there is no command
+// line (e.g. `claude -n` at startup). `system` carries local slash-command I/O
+// in newer Claude Code builds — `system`/`local_command` lines hold the TUI
+// markup (`<command-name>`, `<local-command-stdout>`, …) in a top-level
+// `content` string, so /color, /rename, /clear, and custom commands render as
+// command pills + their captured output; every other `system` subtype
+// (turn_duration, stop_hook_summary, away_summary, …) is dropped as noise.
+// (ai-title is intentionally excluded: it repeats on nearly every turn and
+// would flood the stream; it drives the session NAME instead, not the chat.)
+const TRANSCRIPT_RENDER_TYPES = new Set(["user", "assistant", "custom-title", "system"]);
+
 /**
  * Read only the first non-empty line from a JSONL file using streaming.
  * Avoids loading the entire file into memory.
@@ -178,7 +192,24 @@ router.get("/:id", (req, res) => {
   }
   const agents = stmts.listAgentsBySession.all(req.params.id);
   const events = stmts.listEventsBySession.all(req.params.id);
-  res.json({ session, agents, events });
+  // Workflow-tool runs launched within this session (issue #167). Parse the
+  // JSON-blob columns so the client gets arrays, not strings.
+  const workflows = stmts.listWorkflowsBySession.all(req.params.id).map((w) => {
+    let phases = [];
+    let progress = [];
+    try {
+      phases = w.phases ? JSON.parse(w.phases) : [];
+    } catch {
+      phases = [];
+    }
+    try {
+      progress = w.progress ? JSON.parse(w.progress) : [];
+    } catch {
+      progress = [];
+    }
+    return { ...w, phases, progress };
+  });
+  res.json({ session, agents, events, workflows });
 });
 
 /**
@@ -485,6 +516,8 @@ router.get("/:id/transcripts", async (req, res) => {
 // GET /:id/transcript — Read session JSONL transcript, return structured message list
 // Query params:
 //   agent_id: file-level short ID ("main" or "ad18a79192af10ed1", "acompact-xxx")
+//   run_id: Workflow run id ("wf_...") — disambiguates a workflow inner agent's
+//           nested transcript (subagents/workflows/<run_id>/agent-<agent_id>.jsonl)
 //   limit: max messages to return (default 50, max 200)
 //   after: JSONL line number, only return messages after this line (incremental mode)
 //   before: JSONL line number, only return messages before this line (history mode)
@@ -496,6 +529,7 @@ router.get("/:id/transcript", async (req, res) => {
   }
 
   const agentId = req.query.agent_id || null;
+  const runId = req.query.run_id || null;
   const limit = Math.min(parseInt(req.query.limit) || 50, 200);
   const afterLine = req.query.after ? parseInt(req.query.after) : null;
   const beforeLine = req.query.before ? parseInt(req.query.before) : null;
@@ -508,9 +542,9 @@ router.get("/:id/transcript", async (req, res) => {
   let jsonlPath;
   if (agentId && agentId !== "main") {
     jsonlPath =
-      getSubagentTranscriptPath(req.params.id, session.cwd, agentId) ||
-      findSubagentTranscriptPath(req.params.id, agentId) ||
-      getSnapshotSubagentTranscriptPath(req.params.id, agentId);
+      getSubagentTranscriptPath(req.params.id, session.cwd, agentId, runId) ||
+      findSubagentTranscriptPath(req.params.id, agentId, runId) ||
+      getSnapshotSubagentTranscriptPath(req.params.id, agentId, runId);
   } else {
     jsonlPath =
       getTranscriptPath(req.params.id, session.cwd) ||
@@ -536,8 +570,50 @@ router.get("/:id/transcript", async (req, res) => {
       crlfDelay: Infinity,
     });
 
+    // Dedupe state for synthetic rename markers: custom-title lines can repeat
+    // with the same value across a transcript, so only emit when the title
+    // actually changes from the last one we surfaced.
+    let lastRenameTitle = null;
+
     // Helper: parse a JSONL line into a message object, or null if not a displayable message
     function parseMessage(entry, num) {
+      // /rename, `claude -n`, picker Ctrl+R → custom-title metadata line. These
+      // commands produce no user/assistant turn, so without this they'd be
+      // invisible. Surface a compact "renamed" marker instead.
+      if (entry.type === "custom-title") {
+        const title = typeof entry.customTitle === "string" ? entry.customTitle.trim() : "";
+        if (!title || title === lastRenameTitle) return null;
+        lastRenameTitle = title;
+        return {
+          type: "session_event",
+          event_kind: "rename",
+          title,
+          timestamp: entry.timestamp || null,
+          content: [],
+          line: num,
+        };
+      }
+
+      // Local slash-command I/O. Newer Claude Code builds write the command
+      // invocation and its captured output as `system`/`local_command` lines
+      // with the TUI markup in a top-level `content` string (older builds used
+      // `user` messages, handled below). Surface those as user-side text so the
+      // client's tuiSegments parser renders the command pill + stdout/stderr
+      // (e.g. /color → "/color" pill + "Session color set to: cyan"). Skip
+      // every other system subtype (turn_duration, stop_hook_summary, …) and
+      // empty local_command lines (e.g. /clear writes a content-less one).
+      if (entry.type === "system") {
+        if (entry.subtype !== "local_command") return null;
+        const sysText = typeof entry.content === "string" ? entry.content : "";
+        if (!sysText.trim()) return null;
+        return {
+          type: "user",
+          timestamp: entry.timestamp || null,
+          content: [{ type: "text", text: truncate(sysText, 10240) }],
+          line: num,
+        };
+      }
+
       const msg = entry.type === "assistant" ? entry.message || {} : {};
       const content = [];
 
@@ -626,7 +702,7 @@ router.get("/:id/transcript", async (req, res) => {
         } catch {
           continue;
         }
-        if (entry.type !== "user" && entry.type !== "assistant") continue;
+        if (!TRANSCRIPT_RENDER_TYPES.has(entry.type)) continue;
 
         if (!foundStart) {
           if (lineNum <= afterLine) continue;
@@ -660,7 +736,7 @@ router.get("/:id/transcript", async (req, res) => {
         } catch {
           continue;
         }
-        if (entry.type !== "user" && entry.type !== "assistant") continue;
+        if (!TRANSCRIPT_RENDER_TYPES.has(entry.type)) continue;
         if (lineNum >= beforeLine) {
           // Reached the boundary — stop reading
           rl.close();
@@ -690,7 +766,7 @@ router.get("/:id/transcript", async (req, res) => {
         } catch {
           continue;
         }
-        if (entry.type !== "user" && entry.type !== "assistant") continue;
+        if (!TRANSCRIPT_RENDER_TYPES.has(entry.type)) continue;
 
         const message = parseMessage(entry, lineNum);
         if (!message) continue;
@@ -719,7 +795,7 @@ router.get("/:id/transcript", async (req, res) => {
         } catch {
           continue;
         }
-        if (entry.type !== "user" && entry.type !== "assistant") continue;
+        if (!TRANSCRIPT_RENDER_TYPES.has(entry.type)) continue;
 
         const message = parseMessage(entry, lineNum);
         if (!message) continue;

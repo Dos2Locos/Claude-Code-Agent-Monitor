@@ -131,6 +131,12 @@ router.post("/clear-data", (_req, res) => {
   db.prepare("DELETE FROM events").run();
   db.prepare("DELETE FROM agents").run();
   db.prepare("DELETE FROM sessions").run();
+  // Fired alerts reference the cleared sessions — wipe the feed too. Alert
+  // *rules* survive: they're user configuration, like model_pricing.
+  db.prepare("DELETE FROM alert_events").run();
+  // Webhook delivery log is an audit trail of those fired alerts — wipe it too.
+  // Webhook *targets* survive, like alert rules and pricing.
+  db.prepare("DELETE FROM webhook_deliveries").run();
   db.pragma("foreign_keys = ON");
   res.json({ ok: true, cleared: counts });
 });
@@ -168,10 +174,10 @@ router.post("/reset-pricing", (_req, res) => {
   db.prepare("DELETE FROM model_pricing").run();
 
   const seedPricing = db.prepare(
-    "INSERT OR IGNORE INTO model_pricing (model_pattern, display_name, input_per_mtok, output_per_mtok, cache_read_per_mtok, cache_write_per_mtok) VALUES (?, ?, ?, ?, ?, ?)"
+    "INSERT OR IGNORE INTO model_pricing (model_pattern, display_name, input_per_mtok, output_per_mtok, cache_read_per_mtok, cache_write_per_mtok, cache_write_1h_per_mtok, fast_input_per_mtok, fast_output_per_mtok) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
   );
-  for (const [pattern, name, inp, out, cr, cw] of DEFAULT_PRICING) {
-    seedPricing.run(pattern, name, inp, out, cr, cw);
+  for (const [pattern, name, inp, out, cr, cw, cw1h, fin, fout] of DEFAULT_PRICING) {
+    seedPricing.run(pattern, name, inp, out, cr, cw, cw1h, fin, fout);
   }
 
   const pricing = stmts.listPricing.all();

@@ -52,6 +52,8 @@ const updatesRouter = require("./routes/updates");
 const ccConfigRouter = require("./routes/cc-config");
 const runRouter = require("./routes/run");
 const budgetsRouter = require("./routes/budgets");
+const alertsRouter = require("./routes/alerts");
+const webhooksRouter = require("./routes/webhooks");
 
 function createApp() {
   const app = express();
@@ -75,6 +77,8 @@ function createApp() {
   app.use("/api/cc-config", ccConfigRouter);
   app.use("/api/run", runRouter);
   app.use("/api/budgets", budgetsRouter);
+  app.use("/api/alerts", alertsRouter);
+  app.use("/api/webhooks", webhooksRouter);
   app.get("/api/openapi.json", (_req, res) => {
     res.json(openApiSpec);
   });
@@ -186,6 +190,13 @@ function autoImportLegacySessions() {
         if (backfilled > 0)
           console.log(`Backfilled ${backfilled} compaction events from ~/.claude/`);
       })
+      // Backfill Workflow-tool run journals (issue #167) for all imported
+      // sessions. Inner agents emit no hooks, so this on-disk scan is the only
+      // way historical workflows surface.
+      .then(() => require("./lib/workflow-ingest").ingestAllWorkflows(dbModule))
+      .then(({ workflows }) => {
+        if (workflows > 0) console.log(`Backfilled ${workflows} workflow run(s) from ~/.claude/`);
+      })
       // Write the marker only after the import completes, so a crash mid-import
       // retries on the next start instead of being skipped forever.
       .then(() => {
@@ -231,6 +242,15 @@ function startBackgroundServices() {
   } catch (err) {
     console.warn("cc-watcher failed to start:", err.message);
   }
+  // Near-real-time Workflow-tool run ingestion. The run journal is written when
+  // a workflow finishes — which may not coincide with a hook — so a fast,
+  // change-fingerprinted poll over active sessions keeps the UI fresh without
+  // waiting for the next Stop or the slow maintenance sweep.
+  try {
+    startWorkflowPoll(broadcast);
+  } catch (err) {
+    console.warn("workflow poll failed to start:", err.message);
+  }
   // Flip any dashboard_runs rows the previous process left flagged
   // running/spawning — those handles died with the previous server, so
   // there's no way to attach to them anymore. Marking them abandoned
@@ -246,14 +266,119 @@ function startBackgroundServices() {
   }
 }
 
+/**
+ * Fast, change-fingerprinted poll that ingests Workflow-tool run journals for
+ * active sessions in near real time. Inner agent() calls emit no hooks and the
+ * journal lands at workflow completion, so this fills the gap between disk
+ * writes and the next hook/sweep. Skips sessions whose workflow artifacts are
+ * unchanged since the last ingest (cheap mtime fingerprint). Unref'd so it
+ * never blocks shutdown; disable with DASHBOARD_WORKFLOW_POLL_MS=0.
+ */
+function startWorkflowPoll(broadcast) {
+  const POLL_MS = process.env.DASHBOARD_WORKFLOW_POLL_MS
+    ? Number(process.env.DASHBOARD_WORKFLOW_POLL_MS)
+    : 12_000;
+  if (!Number.isFinite(POLL_MS) || POLL_MS <= 0) return;
+
+  const dbModule = require("./db");
+  const { ingestWorkflowsForSession, workflowsMaxMtime } = require("./lib/workflow-ingest");
+  const lastSeen = new Map(); // sessionId → newest workflow-artifact mtime ingested
+
+  const timer = setInterval(() => {
+    let active;
+    try {
+      active = dbModule.db
+        .prepare(
+          "SELECT id, transcript_path AS tp FROM sessions WHERE status = 'active' AND transcript_path IS NOT NULL ORDER BY updated_at DESC LIMIT 50"
+        )
+        .all();
+    } catch {
+      return;
+    }
+    for (const row of active) {
+      if (!row.tp) continue;
+      let mtime = 0;
+      try {
+        mtime = workflowsMaxMtime(row.tp);
+      } catch {
+        mtime = 0;
+      }
+      if (mtime === 0 || lastSeen.get(row.id) === mtime) continue; // none / unchanged
+      lastSeen.set(row.id, mtime);
+      ingestWorkflowsForSession(dbModule, { id: row.id, transcript_path: row.tp })
+        .then((changed) => {
+          if (!changed || changed.length === 0) return;
+          for (const wf of changed) broadcast("workflow_upserted", wf);
+          const sess = dbModule.stmts.getSession.get(row.id); // nudge cost refresh
+          if (sess) broadcast("session_updated", sess);
+        })
+        .catch(() => {});
+    }
+  }, POLL_MS);
+  if (timer.unref) timer.unref();
+}
+
+/**
+ * Resolve true when a healthy dashboard already answers `/api/health` on
+ * `port`. Used by the standalone entry point to avoid starting a SECOND server
+ * on the now-shared database — two live servers would each persist the
+ * fanned-out hook events and double-count them. Never rejects; any
+ * error/timeout (nothing listening, or a non-dashboard process) resolves false.
+ */
+function probeDashboardHealth(port, timeoutMs = 1500) {
+  return new Promise((resolve) => {
+    const req = http.get(
+      { host: "127.0.0.1", port, path: "/api/health", timeout: timeoutMs },
+      (res) => {
+        let buf = "";
+        res.setEncoding("utf8");
+        res.on("data", (c) => (buf += c));
+        res.on("end", () => {
+          try {
+            resolve(JSON.parse(buf)?.status === "ok");
+          } catch {
+            resolve(false);
+          }
+        });
+      }
+    );
+    req.on("error", () => resolve(false));
+    req.on("timeout", () => {
+      req.destroy();
+      resolve(false);
+    });
+  });
+}
+
 if (require.main === module) {
   const PORT = parseInt(process.env.DASHBOARD_PORT || "4820", 10);
-  const app = createApp();
   let httpServer = null;
 
-  startServer(app, PORT).then((server) => {
-    httpServer = server;
-    startBackgroundServices();
+  // Single-server guard: if a healthy dashboard already owns this port, don't
+  // start a second one — both would write the fanned-out hook events into the
+  // shared database, double-counting them. Point the user at the running
+  // instance and exit. (`npm run dev` binds a free fallback port via
+  // scripts/dev.js, so this only trips when the conventional port is already
+  // serving a healthy dashboard — e.g. the desktop app, or another `npm start`.)
+  //
+  // Skip the guard under `node --watch` (dev:server): a watch restart briefly
+  // races the old process on the same port, and adopting there would wedge
+  // hot-reload. Dev already runs its own isolated server by design.
+  const isWatchMode = process.execArgv.some((a) => a.startsWith("--watch"));
+  probeDashboardHealth(PORT).then((alreadyRunning) => {
+    if (alreadyRunning && !isWatchMode) {
+      console.log(
+        `Agent Dashboard is already running on http://localhost:${PORT} — not starting a ` +
+          `second instance. Open that URL, or stop the other dashboard first.`
+      );
+      process.exit(0);
+      return;
+    }
+    const app = createApp();
+    startServer(app, PORT).then((server) => {
+      httpServer = server;
+      startBackgroundServices();
+    });
   });
 
   // Graceful shutdown — close connections and DB cleanly
@@ -391,6 +516,27 @@ if (require.main === module) {
         );
         continue;
       }
+    }
+
+    // 3. Scan active sessions for Workflow-tool run journals (issue #167).
+    // Catches workflows that complete without a subsequent hook and flips
+    // launch-detected "running" rows to "completed" once their journal lands.
+    const { ingestWorkflowsForSession } = require("./lib/workflow-ingest");
+    for (const row of active) {
+      if (!row.tp) continue;
+      ingestWorkflowsForSession(cleanupDb, { id: row.session_id, transcript_path: row.tp })
+        .then((changed) => {
+          if (!changed || changed.length === 0) return;
+          for (const wf of changed) broadcast("workflow_upserted", wf);
+          const sess = cleanupDb.stmts.getSession.get(row.session_id);
+          if (sess) broadcast("session_updated", sess);
+        })
+        .catch((err) => {
+          console.warn(
+            `[SWEEP] Workflow scan failed for session ${row.session_id}:`,
+            err?.message || err
+          );
+        });
     }
   }, SWEEP_INTERVAL_MS);
 

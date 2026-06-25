@@ -40,8 +40,10 @@ A professional dashboard to track and visualize your Claude Code agent sessions,
 ![Electron](https://img.shields.io/badge/Electron-35-47848F?style=flat-square&logo=electron&logoColor=white)
 ![electron-builder](https://img.shields.io/badge/electron--builder-25.1-2c2e3b?style=flat-square&logo=electron&logoColor=white)
 ![macOS](https://img.shields.io/badge/macOS-Desktop_App-000000?style=flat-square&logo=apple&logoColor=white)
+![Windows](https://img.shields.io/badge/Windows-Desktop_App-0078D6?style=flat-square&logo=windows&logoColor=white)
 ![SMAppService](https://img.shields.io/badge/SMAppService-Login_Items-000000?style=flat-square&logo=apple&logoColor=white)
 ![Universal DMG](https://img.shields.io/badge/Universal_DMG-arm64_%2B_x64-7c3aed?style=flat-square&logo=apple&logoColor=white)
+![NSIS Installer](https://img.shields.io/badge/Windows-NSIS_%2B_Portable-1f6feb?style=flat-square&logo=windows&logoColor=white)
 ![Vitest](https://img.shields.io/badge/Vitest-1.0-646CFF?style=flat-square&logo=vitest&logoColor=white)
 ![React Testing Library](https://img.shields.io/badge/React_Testing_Library-13.0-FF5733?style=flat-square&logo=testinglibrary&logoColor=white)
 ![ESLint](https://img.shields.io/badge/ESLint-8.44-4B32C3?style=flat-square&logo=eslint&logoColor=white)
@@ -91,7 +93,7 @@ A professional dashboard to track and visualize your Claude Code agent sessions,
 - [Tabby — Floating Cat Companion](#tabby--floating-cat-companion)
 - [Connection Status Modal](#connection-status-modal)
 - [VS Code Extension](#vs-code-extension)
-- [macOS Desktop App](#macos-desktop-app)
+- [Desktop App (macOS & Windows)](#desktop-app-macos--windows)
 - [Data Storage](#data-storage)
 - [Statusline](#statusline)
 - [Server Architecture](#server-architecture)
@@ -100,6 +102,7 @@ A professional dashboard to track and visualize your Claude Code agent sessions,
 - [Deployment Modes](#deployment-modes)
 - [Project Structure](#project-structure)
 - [Troubleshooting](#troubleshooting)
+- [Contributing](#contributing)
 - [License](#license)
 
 ---
@@ -187,7 +190,7 @@ Comes with a sleek dark theme, responsive design, and intuitive navigation to ex
 <p align="center">
   <img src="images/session-conversation.png" alt="Session Detail — Conversation tab" width="100%">
   <br>
-  <em>💬 <strong>Session Detail · Conversation</strong> — live transcript viewer with markdown rendering, syntax-highlighted code blocks (line numbers + copy), and per-tool styled tool calls</em>
+  <em>💬 <strong>Session Detail · Conversation</strong> — live transcript viewer with markdown rendering, syntax-highlighted code blocks (line numbers + copy), per-tool styled tool calls, slash-command pills with their captured TUI output, and inline session-rename markers</em>
 </p>
 
 <p align="center">
@@ -215,6 +218,24 @@ Comes with a sleek dark theme, responsive design, and intuitive navigation to ex
 </p>
 
 <p align="center">
+  <img src="images/dynamicworkflows-workflows.png" alt="Dynamic Workflow Runs on the Workflows page" width="100%">
+  <br>
+  <em>🧬 <strong>Workflow Runs (Workflows page)</strong> — "dynamic workflows" spawned by the <code>Workflow</code> tool, reconstructed from on-disk run journals: status, agent count, tokens, and tool calls, expandable into a per-agent breakdown (phase, state, tokens, tools, duration) with humanized result previews</em>
+</p>
+
+<p align="center">
+  <img src="images/dynamicworkflows-workflows2.png" alt="Dynamic Workflow Run expanded with phase filters and per-agent results" width="100%">
+  <br>
+  <em>🧬 <strong>Workflow Runs · expanded</strong> — a run opened up: clickable color-coded phase filters, the per-agent metrics table, and a full list of clickable result items that expand to each agent's complete prompt and result</em>
+</p>
+
+<p align="center">
+  <img src="images/dynamicworkflows-session.png" alt="Dynamic Workflow Runs on the session detail page" width="100%">
+  <br>
+  <em>🧬 <strong>Workflow Runs (Session detail)</strong> — the same fleets linked to their launching session, so a session's dynamic-workflow sub-agents and their folded-in token cost are visible inline</em>
+</p>
+
+<p align="center">
   <img src="images/config.png" alt="Claude Config Explorer" width="100%">
   <br>
   <em>🧰 <strong>Claude Config Explorer</strong> — 12-tab inspector for everything Claude Code knows about: skills, subagents, slash commands, output styles, plugins (with per-plugin contributions), marketplaces, MCP servers, hooks, settings (with secret-key redaction), memory, keybindings, and statusline. Create / edit / delete on low-risk text-file surfaces with mandatory timestamped backups</em>
@@ -238,6 +259,12 @@ Comes with a sleek dark theme, responsive design, and intuitive navigation to ex
   <em>⚙️ <strong>Settings</strong> — model pricing rules, hook installation status, data management, notification preferences, and system info</em>
 </p>
 
+<p align="center">
+  <img src="images/alerts.png" alt="Settings — Alerts & Webhooks" width="100%">
+  <br>
+  <em>🔔 <strong>Settings · Alerts</strong> — rules-based alerting engine and outbound webhooks in one place: alert rules (event pattern / inactivity / stuck agent / token threshold) with per-rule cooldown, a live fired-alert feed, and 14 first-class webhook providers (Slack, Discord, Teams, Google Chat, Mattermost, Rocket.Chat, Telegram, PagerDuty, Opsgenie, Splunk On-Call, Zapier, Make, n8n, Pipedream) plus a generic JSON endpoint with optional HMAC signing</em>
+</p>
+
 The sidebar provides quick access to the Dashboard, Kanban Board, Sessions list, Activity Feed, Analytics, Budgets, Workflows, and Settings. Each page is designed to give you deep insights into your Claude Code agent activity with real-time updates and rich visualizations.
 
 ---
@@ -250,10 +277,10 @@ The dashboard offers a comprehensive set of features to monitor and analyze your
 |------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **Dashboard**                      | Two tabs persisted in `localStorage`: **Monitor** — overview stats (6 stat cards), active agent cards with collapsible subagent hierarchy, and recent activity feed with dynamic item counts that fill available viewport height via `ResizeObserver`. **Health** — composite system health score ring (weighted: 0.4 × success rate + 0.25 × cache hit rate + 0.25 × (100 − error rate) + 0.1 × (100 − heap %)), storage engine donut chart with record distribution, cache performance / error rate / success rate gauges, tool invocation horizontal bar chart (top 8), subagent effectiveness bars, model token distribution, and compaction impact stats. All health metrics auto-refresh every 5 s from `/api/settings/info` and `/api/workflows`. Cursor-following tooltips with viewport edge detection on every chart |
 | **Kanban Board**                   | Two views with a header toggle (persisted in `localStorage`): **Agents** — 4 columns (Working / Waiting / Completed / Error) — and **Sessions** — 5 columns (Active / Waiting / Completed / Error / Abandoned). The **Waiting** column maps directly to the persisted `waiting` status on agents — set when Claude Code is sitting at a prompt (fresh session, between turns, or blocked on a permission Notification) and transitions to `working` the moment the user resumes (UserPromptSubmit / PreToolUse). Each column header shows a `?` tooltip explaining lifecycle transitions. Cards fetch by persisted status from the server (effectively unlimited per status), then paginate client-side at 10 cards per column with a "Show more" affordance. WS subscription scopes to the active view (`agent_*` vs `session_*` frames) so off-view updates don't trigger refetches. |
-| **Sessions**                       | Searchable, filterable, **server-paginated** table of every recorded session. Each page click hits `/api/sessions?status=&q=&limit=10&offset=…`, so cost computation runs only over the visible page — independent of how many sessions exist in the database. The search box (`q=`) does case-insensitive matching across `id` / `name` / `cwd` on the server with a 300 ms debounce, and the response carries a `total` count for the paginator UI. Status filter, search, and pagination compose. |
+| **Sessions**                       | Searchable, filterable, **server-paginated** table of every recorded session. Each page click hits `/api/sessions?status=&q=&limit=10&offset=…`, so cost computation runs only over the visible page — independent of how many sessions exist in the database. The search box (`q=`) does case-insensitive matching across `id` / `name` / `cwd` on the server with a 300 ms debounce, and the response carries a `total` count for the paginator UI. Status filter, search, and pagination compose. Each session's human-readable **name** is read from the transcript and kept in sync in real time — an explicit title from `/rename`, `claude -n`, or the picker's `Ctrl+R` (the JSONL `custom-title` line) always wins, otherwise the auto-generated `ai-title` fills in; the dashboard surfaces that name (falling back to the short ID) on cards, the Dashboard, the Activity Feed, and the Run resume picker. |
 | **Session Detail**                 | Per-session real-time overview panel with active-agent banner (current tool + task), six tile counters (events with events/min rate, tool calls, subagents, compactions, errors, ticking duration), top-tool usage bars, subagent type breakdown, stacked token-flow strip, and event-type pill cloud — all live-refreshed on hook events. Below it: agent hierarchy tree, full event timeline with multi-dimension filters (status, event type, tool, agent, text search, date range), Pre/Post grouping by `tool_use_id`, human-readable summary block, tool-aware input/response renderers (terminal for Bash, unified diff for Edit, line-numbered code for Read/Write, match list for Grep, key/value card for MCP tools), and a Conversation tab that renders transcripts with markdown (headings, lists, blockquotes, tables, task lists), syntax-highlighted code blocks (js/ts, python, json, bash, html, css, sql, yaml, diff) with line numbers and copy-to-clipboard, and per-tool styled tool calls (Bash → terminal, Edit → side-by-side old/new, Write → file label, Read → path chip, Grep → pattern card) |
 | **Activity Feed**                  | Real-time streaming event log with pause/resume, multi-dimension filters (same toolbar as Session Detail plus a Session filter), server-driven "Load more" pagination, debounced filter-aware live refresh preserving the loaded page size, grouping toggle, origin prefix showing project › session › subagent, and a "Session →" button per row                                         |
-| **Analytics**                      | Token usage, tool frequency, activity heatmap (centered, day-of-week aligned starting Sunday, day-name tooltips), session trends, live/offline connection indicator                                                                                                           |
+| **Analytics**                      | Token usage, tool frequency, activity heatmap (centered, day-of-week aligned starting Sunday, day-name tooltips), session trends, live/offline connection indicator. While the analytics payload loads, the chart region (not just the stat tiles) shows **pulsing skeleton placeholders** that mirror the chart layout, so the page never flashes empty/zero charts |
 | **Budgets**                        | Set USD spend limits per rolling period (daily / weekly / monthly) and get alerted before you overspend. Each budget shows live current-period spend with a status-colored progress bar (on-track / warning / over), remaining headroom, and per-threshold alert chips that light up once fired. Configurable alert thresholds (default 80% / 100%); a background scheduler fires web-push + native notifications and live-updates the page over WebSocket when a threshold is newly crossed, re-arming each new period. Spend reuses the same pricing rules as the cost views, so totals match Analytics |
 | **Live Updates**                   | WebSocket push -- no polling, instant UI updates                                                                                                                                                                                                                             |
 | **Auto-Discovery**                 | Sessions and agents are created automatically from hook events                                                                                                                                                                                                               |
@@ -264,10 +291,11 @@ The dashboard offers a comprehensive set of features to monitor and analyze your
 | **Cost Tracking**                  | Per-model cost estimation with configurable pricing rules and per-session breakdowns. Compaction-aware token accounting preserves totals across context compressions. Transcript reads are cached with incremental byte-offset updates for efficient token extraction        |
 | **Transcript Cache**               | Real-time extraction from JSONL transcripts: tokens, compactions, API errors (`isApiErrorMessage` entries stored as `APIError` events), turn durations (stored as `TurnDuration` events), thinking block counts, and usage extras (service_tier, speed, inference_geo). Per-entry growable arrays are tail-capped at `TRANSCRIPT_CACHE_MAX_ARRAY_LEN` (default `1000`, configurable) — both during parse and at finalize — so even a session that runs for days cannot grow a single cache entry without bound. Each entry stores only `{mtimeMs, size, bytesRead, result}`, so there's no shadow copy of the same data at both the top level and inside `result`. Session metadata is enriched with these fields in real-time |
 | **Notifications**                  | Full Web Push (VAPID) pipeline for reliable delivery. Arrive even when the tab is backgrounded or the browser is closed. Explicitly configured for macOS audio support. Configurable per-event toggles with subscription management |
+| **Alerts**                         | Rules-based alerting engine — configured entirely in **Settings → Alerts & Notifications**, a tabbed **Rules / Channels / Activity** control center (no separate page). Define alert rules with four condition types — **event pattern** (match event type / tool name / summary text, optionally requiring N matching events inside a time window, e.g. "more than 5 errors in 2 minutes"), **inactivity** (active session with no events for N minutes), **stuck agent** (agent sitting in `working`/`waiting` with no activity for N minutes), and **token threshold** (session total tokens past a limit). Event-driven rules evaluate server-side on every hook ingest (after the ingest transaction — alerting can never slow down or fail hook delivery); time-based rules run on a 60 s sweep. Fired alerts are persisted to `alert_events` with per-rule + per-session **cooldown dedup** (default 300 s), broadcast as `alert_triggered` WebSocket messages, and surface in the **Activity** tab's live feed with acknowledge / acknowledge-all, an unacknowledged-only filter, and per-alert "View session" links. Rules support enable/disable toggling and cascade their history on delete. Fired alerts also fan out to **universal webhook targets** configured in the **Channels** tab — **14 first-class providers** plus a generic endpoint: **Slack**, **Discord**, **Microsoft Teams**, **Google Chat**, **Mattermost**, **Rocket.Chat** (native chat payloads); **Telegram** (Bot API), **PagerDuty** (Events API v2), **Opsgenie** (Alert API + GenieKey auth), **Splunk On-Call** (VictorOps REST); and **Zapier**, **Make**, **n8n**, **Pipedream**, or any **generic** endpoint (clean JSON envelope with optional **HMAC-SHA256** signing and custom headers). Each provider is described by a server-side registry that declares its payload formatter, how its URL is resolved (some derive it from credentials — e.g. Telegram from the bot token, Opsgenie from the region — others default it), and which credential fields the UI renders. Targets support optional per-rule scoping, a synchronous "Send test" probe, and a recorded delivery log. Delivery runs detached from the alert path with a request timeout and bounded retry/backoff, so it can never slow or block monitoring; target URLs, secrets, and credential fields are stored server-side and never returned by the API (masked/redacted in every response) |
 | **Update Notifier**                | Server periodically runs a non-blocking `git fetch` and compares the local checkout to `origin/master`/`origin/main`/`origin/HEAD`. When upstream is ahead, the UI surfaces a modal with the exact `git pull && npm run setup` command and a one-click **Copy** button; the Sidebar gets a persistent "Check for updates" button with live badge. The dashboard never pulls or restarts itself — the user runs the command in a terminal — so the mechanism cannot break dev sessions, pm2/systemd/Docker supervision, or leave orphaned processes |
 | **Settings**                       | System info, hook status, model pricing management, notification preferences, data export, session cleanup. The Model Pricing section exposes an info popover (the `i` icon next to the title) explaining how rule lookup works (first matching pattern wins), the SQL-style `%` wildcard syntax with concrete examples (`claude-opus-4-7%`, `claude-%-haiku`, exact ids), and that prices must be updated manually when Anthropic publishes new rates — already-stored sessions keep the price applied at ingest time. The CLAUDE_HOME box and Import History panel are fully i18n-driven across en/vi/zh |
 | **MCP Server (Local)**             | Enterprise-grade local MCP server in `mcp/` with three transport modes (stdio, HTTP+SSE, interactive REPL), 25 typed tools across 6 domains, strict input schemas, retry/backoff, localhost-only API enforcement, and tiered mutation/destructive safety gates. HTTP mode serves Streamable HTTP (2025-11-25) and legacy SSE (2024-11-05) on configurable port. REPL mode provides tab-completed interactive tool invocation with colored output |
-| **Workflows**                      | D3.js-powered visualization page with 11 interactive sections: agent orchestration DAG, tool execution Sankey diagram, collaboration network, subagent effectiveness (day-of-week sparklines with portal-rendered tooltips that escape the card's `overflow:hidden` and clamp to the viewport so they never get clipped), detected workflow patterns, model delegation flow, error propagation map (horizontal bars with rate badges, agent type breakdown, API/session error cards), concurrency timeline, session complexity scatter, compaction impact analysis, and per-session drill-in. **Rich, i18n-aware tooltips throughout:** every chart's section title carries an `i` icon that opens a structured "What this shows / How to read it / Why it matters" popover; hovering nodes, edges, bars, and bubbles surfaces multi-section tooltips with deterministic, value-dependent interpretations (e.g. share-of-source / share-of-target percentages, success-rate health buckets, family descriptions for Opus / Sonnet / Haiku, timing patterns like front-loaded / mid-session / back-loaded). Each of the six headline stat cards has a bottom-right info popover explaining how the metric is calculated and what its current value means in plain language. Tooltips are DOM-mutated through a single ref per chart with container-level `mouseleave` fallbacks, so they never lag behind the cursor or stick after re-render. Clicking a row in **Detected Workflow Patterns** expands an in-place detail panel with the full step sequence, stats grid, a deterministic narrative (loop detection, frequency bucket), and a practical suggestion. Status filter tabs (Active Only / Completed / All) filter all 11 sections. Cross-filtering, JSON export, and real-time WebSocket auto-refresh with 3-second debounce |
+| **Workflows**                      | D3.js-powered visualization page with 11 interactive sections: agent orchestration DAG, tool execution Sankey diagram, collaboration network, subagent effectiveness (day-of-week sparklines with portal-rendered tooltips that escape the card's `overflow:hidden` and clamp to the viewport so they never get clipped), detected workflow patterns, model delegation flow, error propagation map (horizontal bars with rate badges, agent type breakdown, API/session error cards), concurrency timeline, session complexity scatter, compaction impact analysis (redesigned as a clear "sessions by compaction count" histogram with axis titles, stat tiles — total / sessions affected / avg / peak — an explanatory help line, and per-bar hover tooltips), and per-session drill-in. Each section's right-aligned subtitle clamps to a single line (ellipsis + hover title) so a long translation never wraps the header. **Rich, i18n-aware tooltips throughout:** every chart's section title carries an `i` icon that opens a structured "What this shows / How to read it / Why it matters" popover; hovering nodes, edges, bars, and bubbles surfaces multi-section tooltips with deterministic, value-dependent interpretations (e.g. share-of-source / share-of-target percentages, success-rate health buckets, family descriptions for Opus / Sonnet / Haiku, timing patterns like front-loaded / mid-session / back-loaded). Each of the six headline stat cards has a bottom-right info popover explaining how the metric is calculated and what its current value means in plain language. Tooltips are DOM-mutated through a single ref per chart with container-level `mouseleave` fallbacks, so they never lag behind the cursor or stick after re-render. Clicking a row in **Detected Workflow Patterns** expands an in-place detail panel with the full step sequence, stats grid, a deterministic narrative (loop detection, frequency bucket), and a practical suggestion. Status filter tabs (Active Only / Completed / All) filter all 11 sections. Cross-filtering, JSON export, and real-time WebSocket auto-refresh with 3-second debounce. A **Workflow Runs** panel surfaces "dynamic workflows" — the fleets of sub-agents spawned by the `Workflow` tool (and self-paced `/loop`) — which emit no hooks and are instead reconstructed from on-disk run journals (`workflows/wf_<runId>.json`): each run shows its phases and a per-agent token / tool-call / duration breakdown, with live `running` detection before the journal is written and a linked subsection on each Session Detail page |
 | **Compaction Tracking**            | Detects `/compact` events from JSONL transcripts, creates compaction agents and events. Backfills legacy compactions on startup. A periodic scanner (cadence derived from `DASHBOARD_STALE_MINUTES`) catches compactions even when no hooks fire. Reads each active session's transcript path directly from `sessions.transcript_path` (populated by the hook handler on the first event that carries it, plus a one-time backfill from `events`) instead of doing a `SELECT DISTINCT json_extract(events.data, '$.transcript_path')` over the entire events table — so the sweep is O(active sessions) and stays cheap on a mature database. Shares the transcript cache so no duplicate file reads occur. Synthetic compaction rows are stamped with the transcript timestamp on both `started_at` and `ended_at` so duration is exactly 0 (compaction is instantaneous); a startup repair migration also heals any pre-existing rows where `ended_at < started_at` (issue #156) |
 | **Subsessions/Resumed Sessions**   | Automatically reactivates sessions when new events arrive, correctly handles `/resume` and orphaned sessions. Periodic sweep (every ¼ of `DASHBOARD_STALE_MINUTES`, clamped to 60 s – 5 min) marks abandoned sessions that slip past event-based detection                                                                     |
 | **Pre-Existing Session Detection** | Sessions already running when the server starts are imported as "active" (based on recent JSONL file modification). Stop events also reactivate imported completed/abandoned sessions, so the first hook from an in-progress session always surfaces it on the dashboard     |
@@ -278,10 +306,12 @@ The dashboard offers a comprehensive set of features to monitor and analyze your
 | **Model Name Formatting**          | Human-friendly model names throughout the UI: raw identifiers like `claude-opus-4-7-20260101` or `claude-opus-4-7[1m]` display as "Claude Opus 4.7" or "Claude Opus 4.7 (1M)". Handles Claude, GPT, and Gemini families with automatic version dot-joining, date/latest suffix stripping, provider prefix removal, and context-window tag formatting. Settings page retains raw names for pricing rule configuration |
 | **Plugin Marketplace**             | Official Claude Code plugin marketplace with 5 plugins (ccam-analytics, ccam-productivity, ccam-devtools, ccam-insights, ccam-dashboard). 18 skills, 4 agents, 3 CLI tools, 2 hook configs. All grounded in actual data model — token baselines, pricing engine, workflow intelligence (11 datasets), session metadata. Install via `claude plugin marketplace add` |
 | **Run Claude**                     | Spawn `claude` subprocesses directly from the dashboard with a chat-style streaming UI. Two modes: **Conversation** (multi-turn — stdin stays open, follow-up turns are piped as stream-json envelopes) and **One-shot** (headless, single prompt → single response). Conversation mode also supports **resuming any existing session** via `claude --resume <id>` — pick from your full sessions history with a searchable picker. The unified active-runs / history modal also offers two zero-config jump buttons: **Resume** on any past conversation row spawns `claude --resume <id>` immediately and seeds the chat with the prior transcript so you land in the live view with full context (no need to retype a prompt — the spawn idles on stdin until you send a follow-up); **View** on any past one-shot row loads the captured transcript inline into the run viewer as read-only (no spawn — same panel, no Stop/follow-up controls). Active runs switcher in the header lets you leave a run in the background, start another, and re-attach later. Re-attach is durable: the client reconciles the spawner's in-memory envelope log (`?envelopes=1`) with the session's on-disk JSONL transcript and prefers whichever has more user/assistant messages, so navigating away from a resumed run and coming back keeps the full prior history visible (the spawner only sees post-spawn turns; the transcript file has prior + current). Model dropdown (Opus 4.7 / 1M / Sonnet 4.6 / Haiku 4.5 / custom), permission-mode picker with explicit `bypassPermissions` warning, **thinking-effort** field (low / medium / high — wired to `--effort`), cwd autocomplete pre-filled with the dashboard's own cwd plus recent session cwds. Real character-by-character streaming via `--include-partial-messages`, plus a client-side **typewriter smoothing layer** that drips each `text_delta` / `thinking_delta` through `requestAnimationFrame` so even short replies (where claude bundles the whole answer into one or two chunks) appear to type in. The merge code keeps the `_streaming` flag and the delta-accumulated `content` array intact when claude's canonical `assistant` envelope arrives mid-stream, so thinking blocks aren't dropped at completion. WebSocket dispatch wraps each envelope in `flushSync` so React 18's auto-batching doesn't collapse bursts of deltas into a single render. **TUI parity (Tier 1)**: a collapsible **limitations banner** that minimizes to a slim pill (never disappears) explaining what stream-json mode can and can't do vs. the terminal TUI; a **prompt editor with slash-command autocomplete** with tiered scoring (exact name → starts-with → word-boundary → contains → subsequence → description-contains) that lists user / project / plugin commands (executed client-side via template expansion before send) and surfaces built-in CLI commands like `/clear`, `/model`, `/config` with a "CLI only — won't run from here" badge; **`@`-file references** with debounced fuzzy-search across the run's cwd (skipping `node_modules`, `.git`, `dist`, `build`, etc.); a **live context-window / token meter** showing input + output + cache-read tokens and running cost, computed from `stream_event` and `result.usage` envelopes during live streaming and from finalized assistant `usage` blocks (input / output / cache-read / cache-creation) when seeded from a transcript on resume / view / re-attach, so the meter populates immediately instead of sitting at 0/200k. Progress bar goes indigo → amber → red at 80% / 95% of the model's context cap; a **status header** with the active model, effort, permission mode, cwd, session ID, envelope count, and elapsed time. Autocomplete dropdowns open upward so they don't collide with the cwd picker below. Live / Offline indicator next to the title. Same-origin guard on the route prevents browser drive-by spawning. Concurrency is effectively uncapped by default (sanity ceiling of 10000 to prevent fork-bomb footguns from a buggy client; the terminal TUI has no cap and neither do we). Set `RUN_MAX_CONCURRENT` if you want a real ceiling. Spawned sessions fire the same hooks any `claude` process does, so they show up automatically in Sessions / Analytics / Kanban / Workflows — and Sessions / SessionDetail surface a green **▶ Run** badge / banner that links back to the Run page for any session that's currently being driven from there |
-| **Claude Config Explorer**         | A 12-tab inspector at `/cc-config` for everything Claude Code knows about: skills, subagents, slash commands, output styles, plugins (with per-plugin contributions count + author/license/homepage from `plugin.json`), marketplaces (with plugin counts read from each `marketplace.json`), MCP servers, hooks (with `~/.claude/hooks/` script listing), settings (structured key-value view + raw JSON toggle, secret-key redaction), memory (`CLAUDE.md` files), keybindings (grouped by context with `<kbd>` chips), and statusline (config + script content). For low-risk text-file surfaces (skills / agents / commands / output styles / memory) the page supports **create / edit / delete with mandatory timestamped backups** atomically written outside the directories Claude Code scans, plus a Backups modal with auto-built `mv` restore commands. Plugins, MCP, hooks-in-settings, and `settings.json` files stay read-only with explainer banners + copy-able CLI commands so the user knows the exact command to run themselves. **Live updates**: a `cc-watcher` running on the server uses `fs.watch` on `~/.claude/` (recursive where the platform supports it) plus `~/.claude.json`, debounced at 500 ms, to broadcast a `cc_config_changed` WebSocket message whenever Claude Code config changes — either via dashboard mutations or external tools (CLI installing a plugin, manually editing `settings.json`, dropping a new skill). The page subscribes and refetches automatically; a Live / Offline pill next to the title shows WebSocket status |
+| **Claude Config Explorer**         | A 12-tab inspector at `/cc-config` for everything Claude Code knows about: skills, subagents, slash commands, output styles, plugins (with per-plugin contributions count + author/license/homepage from `plugin.json`), marketplaces (with plugin counts read from each `marketplace.json`), MCP servers, hooks (with `~/.claude/hooks/` script listing), settings (an at-a-glance **Current configuration** summary of the options `/config` controls — model, verbose, theme, output style, effort, auto-compact, notifications, … — resolved across user/project/project-local scopes with unset options shown as defaults, plus the per-file structured key-value view + raw JSON toggle, secret-key redaction), memory (`CLAUDE.md` files), keybindings (grouped by context with `<kbd>` chips), and statusline (config + script content). For low-risk text-file surfaces (skills / agents / commands / output styles / memory) the page supports **create / edit / delete with mandatory timestamped backups** atomically written outside the directories Claude Code scans, plus a Backups modal with auto-built `mv` restore commands. Plugins, MCP, hooks-in-settings, and `settings.json` files stay read-only with explainer banners + copy-able CLI commands so the user knows the exact command to run themselves. **Live updates**: a `cc-watcher` running on the server uses `fs.watch` on `~/.claude/` (recursive where the platform supports it) plus `~/.claude.json`, debounced at 500 ms, to broadcast a `cc_config_changed` WebSocket message whenever Claude Code config changes — either via dashboard mutations or external tools (CLI installing a plugin, manually editing `settings.json`, dropping a new skill). The page subscribes and refetches automatically; a Live / Offline pill next to the title shows WebSocket status |
 | **Tabby**                          | A floating cat companion pinned to the bottom-right corner of every page. Built entirely on the existing WebSocket `eventBus` — **no new backend, no API key, no new dependencies**. A reactive SVG mascot with cursor-tracking eyes and **eight moods** derived from the live session stream (`idle`, `watching`, `happy`, `worried`, `stuck`, `thinking`, `sleeping`, `disconnected`), each with its own animation (tail flick, ear perk, head bob, shake, sparkle, zzz, alert "!"). **Auto-surface speech bubbles** post short, throttled, coalesced quips on notable events (session started/finished, errors, run completed) and can be muted. Click the cat or press **⌘B / Ctrl+B** (Esc closes) to open a **panel** with a live status line (`N live · M errored · connection state`), quick actions (jump to Run Claude / Activity / Sessions / errored sessions, mute bubbles, clear alerts), and an **Ask** box: simple status questions ("what's running", "any errors", "status") are answered locally from cached data, while any other question hands off to the **Run Claude** page (deep-links to `/run?prompt=…`) to spawn a real Claude Code session. Accessible (keyboard-operable, `aria-live` bubbles, honors `prefers-reduced-motion`), degrades safe to a calm `disconnected` state if the socket is down, toggleable in **Settings** (localized in en/zh/vi). Implementation lives in `client/src/components/Tabby/` |
 | **Progressive Web App (PWA)**      | Three independent PWAs — dashboard, landing page, and wiki — each with its own Web App Manifest and Service Worker. Install any of them to your home screen / dock for a standalone, chrome-less experience. The dashboard SW serves Vite's content-hashed bundles under `/assets/` cache-first (URLs are immutable per build, so cache hits are always correct) and treats everything else — navigations, the SW itself, `manifest.json`, icons, root `/` — as network-first with cache fallback. Combined with explicit `Cache-Control` headers on the production Express static middleware (`immutable` for `/assets/*`, `no-cache, must-revalidate` for `index.html`, `sw.js`, `manifest.json`), a rebuild always replaces the in-browser bundle without a hard refresh; a `controllerchange` listener in the client reloads exactly once when a new SW takes over an already-controlled page. The VAPID push-notification pipeline is preserved. The landing-page and wiki SWs precache their respective shells and lazy-cache images on first visit, enabling offline access after a single load. All manifests use SVG icons (`favicon.svg`) with `sizes="any"` for modern browsers, and include `apple-mobile-web-app-capable` + `apple-touch-icon` meta tags for iOS standalone mode |
-| **macOS Desktop App**              | Optional native macOS `.app` (shipped as a `.dmg`) built with Electron 35, living in the `desktop/` workspace alongside `client/`, `server/`, `mcp/`, and `vscode-extension/`. It embeds the existing Express server **in-process** (`require()`s `server/index.js` — no child process, no IPC) and renders the built React client in a `BrowserWindow`. Adds a native macOS title bar, a menu-bar (tray) icon whose single-click dropdown shows a **live status snapshot** (sessions, agents, events today) pulled from SQLite at click time, a native macOS application menu, auto-start at login via macOS Login Items (`SMAppService`), a **⌘Q confirmation dialog** (second press bypasses), window-close-hides-but-server-keeps-running (dock icon stays as a "still alive" indicator), a single-instance lock, and tray actions for **Open in Browser**, **Restart Server**, and **Show Logs**. Prefers port 4820 (falls back to 4821–4829 then a random high port), adopts a healthy dashboard already running on 4820 instead of double-binding, and **coexists with the web dashboard** — both `npm run dev` and the desktop app can run together with hooks fanning out to both. Notifications fire as native macOS toasts (Web Push doesn't work reliably inside Electron). On first owned-server boot it auto-installs Claude Code hooks and starts the background services, so a DMG-only user gets events flowing with zero manual setup. See [`DESKTOP.md`](./DESKTOP.md) and [`desktop/README.md`](./desktop/README.md) |
+| **Desktop App (macOS & Windows)**  | Optional native desktop app built with Electron 35, living in the `desktop/` workspace alongside `client/`, `server/`, `mcp/`, and `vscode-extension/`. Ships as a macOS `.app` (`.dmg`) **and** a Windows `.exe` (NSIS installer + no-install portable). It embeds the existing Express server **in-process** (`require()`s `server/index.js` — no child process, no IPC) and renders the built React client in a `BrowserWindow`. Adds a native title bar, a menu-bar / notification-area (tray) icon whose single-click dropdown shows a **live status snapshot** (sessions, agents, events today) pulled from SQLite at click time, a native application menu, auto-start at login (macOS Login Items via `SMAppService`; Windows per-user `HKCU\…\Run`), a **⌘Q / Ctrl+Q confirmation dialog** (second press bypasses), window-close-hides-but-server-keeps-running, a single-instance lock, and tray actions for **Open in Browser**, **Restart Server**, and **Show Logs**. Prefers port 4820 (falls back to 4821–4829 then a random high port), adopts a healthy dashboard already running on 4820 instead of double-binding, and **coexists with the web dashboard** — both `npm run dev` and the desktop app can run together with hooks fanning out to both. Notifications fire as native OS toasts (Web Push doesn't work reliably inside Electron). On first owned-server boot it auto-installs Claude Code hooks and starts the background services, so an install-only user gets events flowing with zero manual setup. See [`DESKTOP.md`](./DESKTOP.md) and [`desktop/README.md`](./desktop/README.md) |
+| **Self-hosted assets (no CDN)**    | Every font and script is served locally, so the dashboard and docs make **zero third-party CDN requests** — they render fully offline and leak nothing to external hosts. The React app bundles Inter + JetBrains Mono via [`@fontsource`](https://fontsource.org/) (latin subset; Vite emits content-hashed WOFF2 into `dist/assets/` at build time, no `<link>` to Google Fonts). The landing page and wiki load a self-hosted `fonts/fonts.css` `@font-face` sheet from the repo-root `fonts/` directory. The wiki's Mermaid is vendored locally as `wiki/mermaid.min.js` (the genuine minified `mermaid@10.9.6`) instead of jsDelivr, and the VS Code extension's error page falls back to a system font stack. No `fonts.googleapis.com`, `fonts.gstatic.com`, or `cdn.jsdelivr.net` calls remain anywhere |
+| **Session splash screen**          | A brief branding splash on app load (once per browser session): a **time-aware greeting** (Good morning / afternoon / evening / Working late), a bold tagline, two subtexts, and an animated node-graph brand mark over a dark atmospheric backdrop (radial glow + drifting constellation + grain). Fully localized (en/zh/vi). The overlay is **opaque from the first paint** so the app never flashes through, holds ~2.5 s, then fades out; click anywhere to skip, and it honors `prefers-reduced-motion`. CSS-only animations, no added dependencies |
 
 ---
 
@@ -355,19 +385,24 @@ npm run seed
 
 Creates 8 sample sessions, 23 agents, and 106 events so you can explore the UI immediately.
 
-### Alternative: macOS Desktop App
+### Alternative: Desktop App (macOS & Windows)
 
-If you'd rather not keep a terminal open, install the optional **native macOS desktop app**. It embeds the server in-process, adds a menu-bar (tray) icon, and supports auto-start at login via native Login Items.
+If you'd rather not keep a terminal open, install the optional **native desktop app**. It embeds the server in-process, adds a menu-bar / notification-area (tray) icon, and supports auto-start at login (macOS Login Items / Windows startup).
 
-The fastest path is to **download the pre-built DMG** — grab `ClaudeCodeMonitor-<version>-universal.dmg` from the [latest GitHub Release](https://github.com/hoangsonww/Claude-Code-Agent-Monitor/releases/latest) (CI auto-publishes a `vX.Y.Z` whenever `package.json` is bumped on `master`), then drag **Claude Code Monitor.app** into `/Applications`. Per-commit fresh builds also live as the `ClaudeCodeMonitor-dmg` artifact on every green CI run. To build it yourself instead:
+The fastest path is to **download a pre-built installer** from the [latest GitHub Release](https://github.com/hoangsonww/Claude-Code-Agent-Monitor/releases/latest) (CI auto-publishes a `vX.Y.Z` whenever `package.json` is bumped on `master`):
+
+- **macOS** — grab `ClaudeCodeMonitor-<version>-arm64.dmg` (Apple Silicon) or `-x64.dmg` (Intel) and drag **Claude Code Monitor.app** into `/Applications`.
+- **Windows** — grab `ClaudeCodeMonitor-Setup-<version>-x64.exe` (installer) or `ClaudeCodeMonitor-<version>-x64-portable.exe` (no-install) and run it.
+
+To build it yourself instead:
 
 ```bash
-npm run desktop:install        # install Electron + electron-builder into desktop/
-npm run desktop:dmg:arm64      # fast single-arch DMG for your own Mac (Apple Silicon)
-open desktop/release/ClaudeCodeMonitor-*-arm64.dmg   # open the arch you built
+npm run desktop:install        # install Electron + electron-builder into desktop/ (preflights native deps; prints setup help on failure)
+npm run desktop:dmg:arm64      # macOS: fast single-arch DMG (Apple Silicon)
+npm run desktop:win            # Windows: NSIS installer .exe (run on Windows)
 ```
 
-Full coverage of the desktop app — download, install, tray/menu features, build commands, and signing — is in the [macOS Desktop App](#macos-desktop-app) section below. See also [`DESKTOP.md`](./DESKTOP.md) (user guide) and [`desktop/README.md`](./desktop/README.md) (architecture).
+Full coverage of the desktop app — download, install, tray/menu features, build commands, and signing — is in the [Desktop App (macOS & Windows)](#desktop-app-macos--windows) section below. See also [`DESKTOP.md`](./DESKTOP.md) (user guide) and [`desktop/README.md`](./desktop/README.md) (architecture).
 
 ### Alternative: Docker / Podman
 
@@ -576,6 +611,9 @@ For git clones, the server periodically `git fetch`es `origin` and compares your
 | `npm run dev:client`    | Start only the Vite dev server                             |
 | `npm run build`         | Build the React client to `client/dist/`                   |
 | `npm start`             | Start production server (serves built client)              |
+| `npm test`              | Run the full suite (server `node --test` + client Vitest)  |
+| `npm run test:server`   | Run backend tests (`node --test server/__tests__/`)        |
+| `npm run test:client`   | Run frontend Vitest tests, including **render snapshots for every screen** (`client/src/pages/__tests__/screens.snapshot.test.tsx`); regenerate baselines after intentional UI changes with `cd client && npx vitest run -u` |
 | `npm run install-hooks` | Configure Claude Code hooks in `~/.claude/settings.json`   |
 | `npm run seed`          | Populate database with sample data                         |
 | `npm run import-history`| Import legacy sessions from `~/.claude/` (also runs on startup) |
@@ -591,13 +629,15 @@ For git clones, the server periodically `git fetch`es `origin` and compares your
 | `npm run mcp:typecheck` | Type-check MCP source without emitting build output        |
 | `npm run mcp:docker:build` | Build MCP container image with Docker (`agent-dashboard-mcp:local`) |
 | `npm run mcp:podman:build` | Build MCP container image with Podman (`localhost/agent-dashboard-mcp:local`) |
-| `npm run desktop:install` | Install Electron + electron-builder into the `desktop/` workspace (rebuilds `better-sqlite3` for Electron's ABI) |
+| `npm run desktop:install` | Install Electron + electron-builder into the `desktop/` workspace (rebuilds `better-sqlite3` for Electron's ABI); preflights the native `better-sqlite3` build and prints actionable setup help (incl. a no-toolchain alternative) on failure |
 | `npm run desktop:dev`   | Build and launch the Electron desktop app for local iteration  |
 | `npm run desktop:build` | Compile the desktop TypeScript sources into `desktop/out/`      |
 | `npm run desktop:test`  | Run the desktop smoke test (spawn Electron, probe `/api/health`) |
 | `npm run desktop:dmg`   | Build the **universal** (x64 + arm64) macOS DMG — correct for release, **slow** |
 | `npm run desktop:dmg:arm64` | Build an Apple-Silicon-only DMG — **fast**, recommended for your own Mac |
 | `npm run desktop:dmg:x64` | Build an Intel-only DMG — **fast**                           |
+| `npm run desktop:win`   | Build a Windows **NSIS installer** `.exe` (x64) — run on Windows |
+| `npm run desktop:win:portable` | Build a Windows **portable** (no-install) `.exe` (x64) — run on Windows |
 
 ---
 
@@ -920,6 +960,30 @@ next period begins.
 | `GET`  | `/api/workflows`              | Aggregate workflow data (orchestration, tools, patterns). Optional `?status=active\|completed` query param filters all 11 data sections by session status |
 | `GET`  | `/api/workflows/session/:id`  | Per-session drill-in (agent tree, tool timeline, events) |
 
+### Alerts
+
+| Method   | Path                     | Description                                                            |
+| -------- | ------------------------ | ---------------------------------------------------------------------- |
+| `GET`    | `/api/alerts`            | Fired-alert feed, newest first (`?unacked=true`, `limit`, `offset`)    |
+| `POST`   | `/api/alerts/:id/ack`    | Acknowledge one alert                                                  |
+| `POST`   | `/api/alerts/ack-all`    | Acknowledge every unacked alert                                        |
+| `GET`    | `/api/alerts/rules`      | List alert rules                                                       |
+| `POST`   | `/api/alerts/rules`      | Create a rule (`event_pattern` \| `inactivity` \| `status_duration` \| `token_threshold`) |
+| `PATCH`  | `/api/alerts/rules/:id`  | Update name / config / enabled / cooldown (rule type is immutable)     |
+| `DELETE` | `/api/alerts/rules/:id`  | Delete a rule and its fired-alert history                              |
+
+### Webhooks
+
+| Method   | Path                              | Description                                                                          |
+| -------- | --------------------------------- | ------------------------------------------------------------------------------------ |
+| `GET`    | `/api/webhooks/providers`         | Supported providers + their config fields (drives the UI form)                       |
+| `GET`    | `/api/webhooks`                   | List webhook targets (URLs masked, secrets redacted)                                 |
+| `POST`   | `/api/webhooks`                   | Create a target (14 first-class providers + `generic`)                               |
+| `PATCH`  | `/api/webhooks/:id`               | Update name / url / enabled / secret / headers / rule scope (type is immutable)      |
+| `DELETE` | `/api/webhooks/:id`               | Delete a target and its delivery log                                                 |
+| `POST`   | `/api/webhooks/:id/test`          | Send a synthetic test alert and report the delivery result                           |
+| `GET`    | `/api/webhooks/:id/deliveries`    | Recent delivery log for a target (`limit`, `offset`)                                  |
+
 ### Settings
 
 | Method | Path                           | Description                                      |
@@ -1094,7 +1158,7 @@ Connect to `ws://localhost:4820/ws` to receive real-time push messages:
 }
 ```
 
-**Message types:** `session_created`, `session_updated`, `agent_created`, `agent_updated`, `new_event`
+**Message types:** `session_created`, `session_updated`, `agent_created`, `agent_updated`, `new_event`, `alert_triggered`, `alert_updated`
 
 ```mermaid
 stateDiagram-v2
@@ -1340,17 +1404,23 @@ For detailed developer configuration, see the [.vscode](./.vscode) and [vscode-e
 
 ---
 
-## macOS Desktop App
+## Desktop App (macOS & Windows)
 
-The dashboard also ships as an optional **native macOS application** — a single `.app` (distributed as a `.dmg`) you install once and forget. It lives in the `desktop/` workspace, a sibling of `client/`, `server/`, `mcp/`, and `vscode-extension/`, and is built with **Electron 35**.
+The dashboard also ships as an optional **native desktop application** you install once and forget — a macOS `.app` (distributed as a `.dmg`) and a Windows `.exe` (an NSIS installer plus a no-install portable build). It lives in the `desktop/` workspace, a sibling of `client/`, `server/`, `mcp/`, and `vscode-extension/`, and is built with **Electron 35**.
 
 <p align="center">
-  <img src="images/macos.png" alt="Claude Code Monitor running as a native macOS desktop app" width="100%">
+  <img src="images/macos.png" alt="Claude Code Monitor running as a native desktop app" width="100%">
   <br>
-  <em>🍎 <strong>macOS Desktop App</strong> — native <code>.app</code> shell with a menu-bar (tray) icon, Open-at-Login, and a single-instance lock. The same dashboard, in a real macOS window.</em>
+  <em>🍎🪟 <strong>Desktop App</strong> — native shell with a menu-bar / notification-area (tray) icon, Open-at-Login, and a single-instance lock. The same dashboard, in a real OS window (macOS shown).</em>
 </p>
 
-Everything you see in the browser at `localhost:4820` lives inside this window, with macOS-native lifecycle on top: a menu-bar (tray) icon, a native application menu, Login Items integration for auto-start, and a single quit button that cleanly shuts the server down.
+<p align="center">
+  <img src="images/windows_app.png" alt="Claude Code Monitor running as a native Windows desktop app, showing the Activity Feed with the Windows window menu bar and Tabby panel" width="100%">
+  <br>
+  <em>🪟 The same dashboard as a native Windows app — notification-area (tray) icon, native window menu, and Open-at-Login.</em>
+</p>
+
+Everything you see in the browser at `localhost:4820` lives inside this window, with native OS lifecycle on top: a tray icon, a native application menu, auto-start integration, and a single quit button that cleanly shuts the server down.
 
 ### How it works
 
@@ -1386,41 +1456,51 @@ On launch the app:
 1. Picks a free port — preferring **4820**, falling back to **4821–4829**, then a random high port if all of those are taken.
 2. If a healthy dashboard server already answers `/api/health` on `4820` (e.g. you ran `npm start` in a terminal), it **adopts that server** instead of double-binding — no port collision, no SQLite contention. An adopted server keeps running after you quit the app.
 3. Otherwise it boots the embedded server, and on **first owned-server boot** auto-installs the Claude Code hooks and starts the background services (update scheduler, `cc-watcher`, orphaned-run reconciliation). A DMG-only user therefore gets events flowing with **zero manual setup** — no checkout, no `npm run install-hooks`.
-4. Recovers your **login-shell `PATH`** so the **Run Claude** feature can find and spawn the `claude` CLI — a Finder/Dock-launched app otherwise inherits only launchd's minimal `PATH` and would miss CLIs in `~/.local/bin`, `/opt/homebrew/bin`, version-manager bins, etc.
-5. Opens the dashboard window (unless macOS launched the app at login, in which case it stays tray-only).
+4. **(macOS)** Recovers your **login-shell `PATH`** so the **Run Claude** feature can find and spawn the `claude` CLI — a Finder/Dock-launched app otherwise inherits only launchd's minimal `PATH` and would miss CLIs in `~/.local/bin`, `/opt/homebrew/bin`, version-manager bins, etc. (On Windows the process already inherits the user `PATH`.)
+5. Opens the dashboard window — unless the app was launched at login (on macOS via Login Items; on Windows via the tagged `HKCU\…\Run` entry), in which case it stays tray-only.
 6. On quit, shuts the embedded server down gracefully and **closes SQLite cleanly** (WAL checkpoint).
 
 ### Features
 
-- **Menu-bar (tray) icon** — always-on status surface. Left-click toggles the dashboard window; right-click opens a context menu with **Open Dashboard**, **Open in Browser**, **Restart Server**, **Show Logs**, **Open at Login** (toggle), and **Quit**.
-- **Native macOS application menu** — standard `About` / `File` / `Edit` / `View` / `Window` / `Help` menu with `⌘` shortcuts.
-- **Auto-start at login** — toggle **Open at Login** from the tray or app menu. It registers through macOS's modern `SMAppService` API, so the entry appears under **System Settings → General → Login Items** where users expect it.
+- **Tray icon** — always-on status surface (macOS menu bar / Windows notification area). Left-click toggles the dashboard window; right-click opens a context menu with **Open Dashboard**, **Open in Browser**, **Restart Server**, **Show Logs**, **Open at Login** (toggle), and **Quit**. macOS uses a tinted template glyph; Windows uses the colored `icon.ico` (a black template would vanish on the dark taskbar).
+- **Window & taskbar icon** — the `BrowserWindow` is wired to the colored app logo (`icon.ico` on Windows, `icon.png` elsewhere), so the title bar / taskbar show the real Claude Code Monitor icon — even an unpackaged `npm run desktop:dev` run no longer shows the generic Electron icon.
+- **Native application menu** — standard `About` / `File` / `Edit` / `View` / `Window` / `Help` menu with `⌘` / `Ctrl` shortcuts. The **File → Open Dashboard** item (`⌘1`) is **macOS-only**: macOS keeps a global menu bar after the window hides, so it can reopen the window — on Windows/Linux the menu is attached to the window and can't fire while it's hidden, so reopen from the tray's **Open Dashboard** instead (which reliably raises the window even when minimized or behind other windows).
+- **Auto-start at login** — toggle **Open at Login** from the tray or app menu. On macOS it registers through the modern `SMAppService` API, so the entry appears under **System Settings → General → Login Items**; on Windows it writes a per-user `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` entry, visible in **Task Manager → Startup**.
 - **Window-close hides, server keeps running** — closing the window just hides it; the server and tray stay up. Click the tray to bring the window back.
-- **Single-instance lock** — double-launching simply focuses the existing window; no second server, no port collision.
-- **Data survives reinstalls and updates** — the SQLite database and VAPID keys live in `~/Library/Application Support/Claude Code Monitor/data/`, **outside the `.app` bundle**. Because a packaged, code-signed, or app-translocated bundle is read-only, writing the database there would break History Import and event persistence — keeping it in Application Support fixes that and means your imported history is untouched when you replace or upgrade the app.
-- **`claude` CLI on PATH** — the app recovers your login-shell `PATH` at startup, so the **Run Claude** feature works even though a Finder/Dock-launched app would otherwise only inherit launchd's minimal `PATH`.
-- **Logs** — the main process writes to `~/Library/Logs/Claude Code Monitor/desktop.log`; reach it from the tray menu's **Show Logs**.
+- **Single-instance lock** — double-launching simply focuses the existing window; no second server, no port collision. (Applies on every platform.)
+- **Data survives reinstalls and updates** — the SQLite database and VAPID keys live in the per-user app-data directory **outside the app bundle / install dir** — `~/Library/Application Support/Claude Code Monitor/data/` on macOS, `%APPDATA%\Claude Code Monitor\data\` on Windows. A packaged bundle is read-only, so writing the database inside it would break History Import and event persistence; keeping it in app-data fixes that and means your imported history is untouched when you replace or upgrade the app. (The Windows NSIS uninstaller keeps this data by default.)
+- **`claude` CLI on PATH** — on macOS the app recovers your login-shell `PATH` at startup, so the **Run Claude** feature works even though a Finder/Dock-launched app would otherwise only inherit launchd's minimal `PATH`. (On Windows the inherited user `PATH` already includes it.)
+- **Logs** — the main process writes to `~/Library/Logs/Claude Code Monitor/desktop.log` (macOS) or `%APPDATA%\Claude Code Monitor\logs\desktop.log` (Windows); reach it from the tray menu's **Show Logs**.
 
 ### Get it
 
-**Option A — download the pre-built DMG (recommended).** Two flavours:
+**Option A — download a pre-built installer (recommended).** From **[Releases → latest](https://github.com/hoangsonww/Claude-Code-Agent-Monitor/releases/latest)** (public, no GitHub sign-in). CI auto-publishes a new `vX.Y.Z` release whenever the version in `package.json` is bumped on `master`, so this link always serves the current build:
 
-- **[Releases → latest](https://github.com/hoangsonww/Claude-Code-Agent-Monitor/releases/latest)** — public, no GitHub sign-in. CI auto-publishes a new `vX.Y.Z` release whenever the version in `package.json` is bumped on `master`, so this link always serves the current build.
-- **Per-commit CI artifact** — every green run of the `🍎 macOS Desktop (DMG)` job uploads `ClaudeCodeMonitor-dmg` (sign-in required, 14-day retention) — useful for testing master before the next release tag.
+| Platform | Asset | Notes |
+| --- | --- | --- |
+| macOS (Apple Silicon) | `ClaudeCodeMonitor-<ver>-arm64.dmg` | drag into `/Applications` |
+| macOS (Intel) | `ClaudeCodeMonitor-<ver>-x64.dmg` | drag into `/Applications` |
+| Windows (installer) | `ClaudeCodeMonitor-Setup-<ver>-x64.exe` | per-user install, no admin |
+| Windows (portable) | `ClaudeCodeMonitor-<ver>-x64-portable.exe` | run without installing |
+
+Per-commit fresh builds also live as CI artifacts (sign-in required, 14-day retention): `ClaudeCodeMonitor-dmg` from the `🍎 macOS Desktop (DMG)` job and `ClaudeCodeMonitor-win` from the `🪟 Windows Desktop (EXE)` job — useful for testing `master` before the next release tag.
 
 **Option B — build it yourself.** From the repo root:
 
 ```bash
 npm run setup                # install root + client deps, build client, install hooks
 npm run build                # build the React client (client/dist)
-npm run desktop:install      # install Electron + electron-builder into desktop/
-npm run desktop:dmg:arm64    # fast single-arch DMG → desktop/release/ClaudeCodeMonitor-<ver>-arm64.dmg
+npm run desktop:install      # install Electron + electron-builder into desktop/ (preflights native deps; prints setup help on failure)
+npm run desktop:dmg:arm64    # macOS:   fast single-arch DMG → desktop/release/ClaudeCodeMonitor-<ver>-arm64.dmg
+npm run desktop:win          # Windows: NSIS installer → desktop/release/ClaudeCodeMonitor-Setup-<ver>-x64.exe
 ```
 
-> [!WARNING]
-> The universal `npm run desktop:dmg` build is intentionally **slow** — it builds the app **twice** (once per architecture), merges both with `@electron/universal`, and signs every binary, which means gigabytes of disk I/O. For building for **your own Mac**, use the single-arch `npm run desktop:dmg:arm64` (Apple Silicon) or `npm run desktop:dmg:x64` (Intel) — they finish in roughly a minute. Reserve the universal build for release artifacts; CI already produces one as the `ClaudeCodeMonitor-dmg` artifact.
+> [!NOTE]
+> **DMGs build on macOS; Windows `.exe`s build on Windows** — electron-builder packages for the host OS. The macOS universal `npm run desktop:dmg` build is intentionally **slow** (it builds the app twice and merges with `@electron/universal`); for your own Mac use the single-arch `desktop:dmg:arm64` / `desktop:dmg:x64`. On Windows, `better-sqlite3` is fetched as a prebuilt Electron binary by `npm run desktop:install`, so no Visual Studio C++ toolchain is needed in the common case. If the build does fail (no prebuilt binary, or a missing C++ toolchain), `desktop:install` prints the exact per-OS fix plus a no-toolchain alternative and fails loudly instead of leaving a broken install.
 
 ### Install it
+
+**macOS:**
 
 1. Double-click the `.dmg` to mount it.
 2. Drag **Claude Code Monitor.app** into your `/Applications` folder.
@@ -1434,34 +1514,60 @@ npm run desktop:dmg:arm64    # fast single-arch DMG → desktop/release/ClaudeCo
 
 4. Launch the app. The tray icon appears and the dashboard window opens.
 
+**Windows:**
+
+1. Run `ClaudeCodeMonitor-Setup-<ver>-x64.exe`. It installs **per-user** under `%LOCALAPPDATA%\Programs\Claude Code Monitor` (no administrator elevation) and lets you pick the install directory; or run the `*-portable.exe` to launch without installing.
+2. The installer is **unsigned** by default, so Windows **SmartScreen** may show *"Windows protected your PC"* on first launch — click **More info → Run anyway**.
+3. Launch from the Start menu / desktop shortcut. The notification-area (tray) icon appears and the dashboard window opens.
+
+<p align="center">
+  <img src="images/setup_win_wizard.png" alt="NSIS installer step 1 — Choose Installation Options, with per-user (Only for me) versus all-users selection" width="100%">
+  <br>
+  <em>Windows installer · Step 1 — <strong>Choose Installation Options</strong> (per-user "Only for me" vs. all users).</em>
+</p>
+
+<p align="center">
+  <img src="images/setup_win_wizard2.png" alt="NSIS installer step 2 — Choose Install Location, with the per-user %LOCALAPPDATA%\Programs destination folder" width="100%">
+  <br>
+  <em>Windows installer · Step 2 — <strong>Choose Install Location</strong> (defaults to per-user <code>%LOCALAPPDATA%\Programs</code>).</em>
+</p>
+
+<p align="center">
+  <img src="images/setup_win_wizard3.png" alt="NSIS installer step 3 — Completing Setup, with the option to finish and run the app" width="100%">
+  <br>
+  <em>Windows installer · Step 3 — <strong>Completing Setup</strong> (Finish and launch the app).</em>
+</p>
+
 ### Build commands
 
 All commands run from the **repo root**:
 
 | Command                     | What it does                                                                 |
 | --------------------------- | ---------------------------------------------------------------------------- |
-| `npm run desktop:install`   | Install Electron + electron-builder into `desktop/`; rebuild `better-sqlite3` for Electron's ABI |
+| `npm run desktop:install`   | Install Electron + electron-builder into `desktop/`; rebuild `better-sqlite3` for Electron's ABI; preflights the native `better-sqlite3` build and prints actionable setup help (incl. a no-toolchain alternative) on failure |
 | `npm run desktop:build`     | Compile the desktop TypeScript sources into `desktop/out/`                    |
 | `npm run desktop:dev`       | Build and launch the Electron app for local iteration                         |
 | `npm run desktop:test`      | Run the smoke test (spawn Electron, probe `/api/health`, shut down)            |
-| `npm run desktop:dmg`       | Build the **universal** (x64 + arm64) DMG — correct for release, **slow**      |
-| `npm run desktop:dmg:arm64` | Build an Apple-Silicon-only DMG — **fast** (~1 min), recommended for your own Mac |
-| `npm run desktop:dmg:x64`   | Build an Intel-only DMG — **fast** (~1 min)                                    |
+| `npm run desktop:dmg`       | **macOS:** build the **universal** (x64 + arm64) DMG — correct for release, **slow** |
+| `npm run desktop:dmg:arm64` | **macOS:** build an Apple-Silicon-only DMG — **fast** (~1 min), recommended for your own Mac |
+| `npm run desktop:dmg:x64`   | **macOS:** build an Intel-only DMG — **fast** (~1 min)                         |
+| `npm run desktop:win`       | **Windows:** build the NSIS installer `.exe` (x64)                             |
+| `npm run desktop:win:portable` | **Windows:** build the no-install portable `.exe` (x64)                     |
 
-The resulting DMG is **~80 MB** (≈ 250 MB on disk once installed) — the standard Electron bundle tax.
+The resulting macOS DMG is **~80 MB** (≈ 250 MB on disk once installed) and the Windows installer is comparable — the standard Electron bundle tax.
 
 ### Signing & notarization
 
-The DMG is **ad-hoc signed** by default so anyone can build a working `.app` without a paid Apple Developer account — the `package` script sets `CSC_IDENTITY_AUTO_DISCOVERY=false` so a code-signing certificate already in the contributor's keychain is never auto-picked. Real **Developer ID signing** is opt-in via `CSC_LINK` (a base64-encoded `.p12`) and `CSC_KEY_PASSWORD`; **Apple notarization** is opt-in via `APPLE_ID`, `APPLE_TEAM_ID`, and `APPLE_APP_SPECIFIC_PASSWORD`. CI picks all of these up automatically when provided — no code change required.
+The macOS DMG is **ad-hoc signed** by default so anyone can build a working `.app` without a paid Apple Developer account — the `package` script sets `CSC_IDENTITY_AUTO_DISCOVERY=false` so a code-signing certificate already in the contributor's keychain is never auto-picked. Real **Developer ID signing** is opt-in via `CSC_LINK` (a base64-encoded `.p12`) and `CSC_KEY_PASSWORD`; **Apple notarization** is opt-in via `APPLE_ID`, `APPLE_TEAM_ID`, and `APPLE_APP_SPECIFIC_PASSWORD`. The **Windows** build is **unsigned** by default (SmartScreen may prompt on first launch — *More info → Run anyway*); Authenticode signing activates only when an explicit certificate is provided via `CSC_LINK` + `CSC_KEY_PASSWORD`. CI picks all of these up automatically when provided — no code change required.
 
 ### Implementation notes
 
 - **`better-sqlite3`** is the only native module in the dependency tree, and a native module must be compiled against the exact Node ABI it runs on. The `desktop/` workspace ships its **own copy** of `better-sqlite3` rebuilt for Electron's ABI and uses a process-local `require` redirect to point `server/db.js` at it; the repo-root copy stays built for system Node (so `npm run test:server` keeps working).
-- **Building a DMG rebuilds `better-sqlite3` for the target architecture**, which can leave the desktop copy built for the other CPU arch and break `npm run desktop:dev` / `npm run desktop:test` with `ERR_DLOPEN_FAILED`. The desktop `prebuild` step now **auto-heals** the native module for the local machine on the next build, so the dev and smoke-test flows keep working after an arch-specific DMG build.
+- **Building a DMG rebuilds `better-sqlite3` for the target architecture**, which can leave the desktop copy built for the other CPU arch and break `npm run desktop:dev` / `npm run desktop:test` with `ERR_DLOPEN_FAILED`. The desktop `prebuild` step now **auto-heals** the native module for the local machine on the next build, so the dev and smoke-test flows keep working after an arch-specific DMG build. The `prebuild` step also **fails fast with setup help** when the `better-sqlite3` native binary is missing entirely, turning a runtime crash into a copy-pasteable build-time error.
 - The **only change outside `desktop/`** is a behavior-preserving refactor of `server/index.js`: its post-listen bootstrap (update scheduler, `cc-watcher`, orphaned-run reconciliation) was extracted into an exported `startBackgroundServices()` so the embedded server runs exactly what `node server/index.js` runs. The standalone `node server/index.js` path is functionally unchanged; `client/`, `scripts/`, `mcp/`, and `vscode-extension/` are untouched.
-- A path-filtered **`🍎 macOS Desktop (DMG)`** CI job on `macos-latest` builds, smoke-tests, and packages the universal DMG, then uploads it as the `ClaudeCodeMonitor-dmg` artifact.
+- Two path-filtered desktop CI jobs build, smoke-test, and package the app: **`🍎 macOS Desktop (DMG)`** on `macos-latest` (uploads the `ClaudeCodeMonitor-dmg` artifact — two single-arch DMGs) and **`🪟 Windows Desktop (EXE)`** on `windows-latest` (uploads the `ClaudeCodeMonitor-win` artifact — NSIS installer + portable). On a version-bump push to `master`, the `release` job attaches **both** the macOS DMGs and the Windows `.exe`s to the published `vX.Y.Z` GitHub Release. The Windows icon (`desktop/assets/icon.ico`) is committed to the repo (regenerate it from `icon.png` with `npm run build:win-icon`, PowerShell + .NET, no extra tooling).
 
-For the full user guide (download, install, Gatekeeper, tray menu, auto-start) see [`DESKTOP.md`](./DESKTOP.md); for the contributor / architecture reference (process model, boot lifecycle, port discovery, build pipeline — with Mermaid diagrams) see [`desktop/README.md`](./desktop/README.md).
+For the full user guide (download, install, Gatekeeper / SmartScreen, tray menu, auto-start) see [`DESKTOP.md`](./DESKTOP.md); for the contributor / architecture reference (process model, boot lifecycle, port discovery, build pipeline — with Mermaid diagrams) see [`desktop/README.md`](./desktop/README.md).
 
 ---
 
@@ -1733,11 +1839,11 @@ graph LR
     style M_REPL fill:#0f766e,stroke:#14b8a6,color:#fff
 ```
 
-Optional **macOS desktop app** — a single Electron process that hosts the Express server in-process (no terminal, no child process):
+Optional **desktop app (macOS & Windows)** — a single Electron process that hosts the Express server in-process (no terminal, no child process):
 
 ```mermaid
 flowchart LR
-    subgraph desktop["macOS Desktop App — 1 Electron process"]
+    subgraph desktop["Desktop App (macOS & Windows) — 1 Electron process"]
         E_MAIN["Electron Main Process<br/>(Node 22 / Electron 35)"]
         E_HOST["server-host.ts<br/>require() server/index.js"]
         E_SRV["Embedded Express :4820<br/>API · SQLite · WebSocket"]
@@ -1947,13 +2053,15 @@ agent-dashboard/
 |   |   |-- server-host.ts       # In-process Express boot, port discovery, adoption, DB close
 |   |   |-- window.ts            # BrowserWindow + persisted window geometry
 |   |   |-- tray.ts              # Menu-bar (tray) icon + context menu
-|   |   |-- menu.ts              # Native macOS application menu
+|   |   |-- menu.ts              # Native application menu (File ▸ Open Dashboard is macOS-only)
 |   |   |-- login-item.ts        # macOS Login Items auto-start toggle (SMAppService)
 |   |   |-- logger.ts            # File logger -> ~/Library/Logs/Claude Code Monitor/desktop.log
 |   |   |-- constants.ts         # App name, ports, timeouts, window size
 |   |   +-- preload.ts           # Intentionally empty (zero renderer privilege)
 |   |-- scripts/
-|   |   |-- prebuild.js          # Ensures root + client are built before tsc
+|   |   |-- install.js           # Preflights native deps for desktop:install; prints setup help + exits non-zero on failure
+|   |   |-- preflight.js         # Shared better-sqlite3 binary check + actionable per-OS setup help (incl. no-toolchain alternative)
+|   |   |-- prebuild.js          # Ensures root + client are built before tsc; fails fast with setup help if native binary missing
 |   |   |-- build-icons.sh       # SVG -> PNG/ICNS via qlmanage/sips/iconutil
 |   |   +-- notarize.js          # electron-builder afterSign hook (opt-in notarization)
 |   +-- tests/
@@ -1999,6 +2107,14 @@ agent-dashboard/
 | WebSocket disconnected            | The client auto-reconnects every 2 seconds. Check that port 4820 is not blocked by a firewall                                                                    |
 | Stale data after restart          | The database persists across restarts. Run `npm run seed` for fresh demo data, or delete `data/dashboard.db` to reset                                            |
 | MCP tools fail to connect         | Confirm dashboard API is up on `MCP_DASHBOARD_BASE_URL` and rebuild/start MCP (`npm run mcp:build`, `npm run mcp:start`)                                         |
+
+---
+
+## Contributing
+
+Contributions are welcome — see [`.github/CONTRIBUTING.md`](.github/CONTRIBUTING.md) for the full guide.
+
+All contributors must sign the [Contributor License Agreement](https://github.com/hoangsonww/Claude-Code-Agent-Monitor/blob/master/CLA.md). This is enforced automatically on every pull request by the `🖋️ CLA Assistant` GitHub Action: the first time you open a PR, a bot asks you to sign by commenting `I have read the CLA Document and I hereby sign the CLA`. The PR's **CLA Assistant** status check stays red until you do, and signing once covers all future contributions.
 
 ---
 

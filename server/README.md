@@ -417,6 +417,8 @@ The OpenAPI spec is generated from `server/openapi.js` and is the source of trut
 | `GET`   | `/api/sessions/:id` | Session detail (includes `agents` + `events`)   |
 | `POST`  | `/api/sessions`     | Create session (idempotent by `id`)             |
 | `PATCH` | `/api/sessions/:id` | Update session                                   |
+| `GET`   | `/api/sessions/:id/transcripts` | List the session's transcript files (main + sub-agents) |
+| `GET`   | `/api/sessions/:id/transcript`  | Cursor-paginated message stream for one transcript |
 | `GET`   | `/api/agents`       | List agents (`status`, `session_id`, pagination)|
 | `GET`   | `/api/agents/:id`   | Agent detail                                     |
 | `POST`  | `/api/agents`       | Create agent (idempotent by `id`)               |
@@ -424,6 +426,10 @@ The OpenAPI spec is generated from `server/openapi.js` and is the source of trut
 | `GET`   | `/api/events`       | List events (`session_id`, `limit`, `offset`)   |
 | `GET`   | `/api/stats`        | Dashboard aggregate counters                     |
 | `GET`   | `/api/analytics`    | Analytics aggregates for charts/trends           |
+
+**Session names** are kept in sync with the transcript title: on every hook event (and in the 15 s watchdog) the ingestor reads the latest `custom-title` (`/rename`, `claude -n`, picker `Ctrl+R`) or `ai-title` (auto) from the JSONL and updates `sessions.name` — `custom-title` always wins, `ai-title` only fills a placeholder/auto name — broadcasting `session_updated` so the UI reflects renames in real time.
+
+**Transcript stream** (`GET /api/sessions/:id/transcript`) returns `user` / `assistant` messages plus: synthetic `session_event` rename markers (from `custom-title`), and local slash-command I/O surfaced from `system`/`local_command` lines (the `<command-name>` pill + `<local-command-stdout>`/`stderr` output, e.g. `/color`, `/rename`, custom commands). Content-less `local_command` lines and other `system` subtypes are dropped.
 
 ### Hook Ingestion
 
@@ -828,13 +834,15 @@ function calculateCost(model, inputTokens, outputTokens) {
 Loaded on first run from `db.js`:
 
 ```javascript
+// [pattern, display_name, input, output, cache_read, cache_write_5m, cache_write_1h]
+// (rates per million tokens; 5m write ≈ 1.25× input, 1h write ≈ 2× input)
 const DEFAULT_PRICING = [
-  { pattern: 'claude-sonnet-4', input: 3.0, output: 15.0 },
-  { pattern: 'claude-opus-4', input: 15.0, output: 75.0 },
-  { pattern: 'claude-haiku-4', input: 0.8, output: 4.0 },
-  { pattern: 'gpt-5.1-codex', input: 2.5, output: 10.0 },
-  { pattern: 'gpt-5-mini', input: 0.15, output: 0.6 },
-  // ... etc
+  ["claude-fable-5%", "Claude Fable 5", 10, 50, 1, 12.5, 20],
+  ["claude-mythos-5%", "Claude Mythos 5", 10, 50, 1, 12.5, 20],
+  ["claude-opus-4-8%", "Claude Opus 4.8", 5, 25, 0.5, 6.25, 10],
+  ["claude-sonnet-4-6%", "Claude Sonnet 4.6", 3, 15, 0.3, 3.75, 6],
+  ["claude-haiku-4-5%", "Claude Haiku 4.5", 1, 5, 0.1, 1.25, 2],
+  // ... one explicit row per model (see server/db.js for the full list)
 ];
 ```
 

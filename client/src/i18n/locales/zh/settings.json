@@ -25,14 +25,18 @@
     "tooltip": {
       "title": "模型定价的工作原理",
       "howItWorks": "工作原理",
-      "howItWorksBody": "当一个会话上报使用量时，仪表盘会查找第一个模式与 model id 匹配的定价规则，将（输入 token / 100 万）和（输出 token / 100 万）分别乘以下方的费率以计算费用。规则按从上到下的顺序匹配——首条匹配的规则生效。",
+      "howItWorksBody": "当一个会话上报使用量时，仪表盘会查找第一个模式与 model id 匹配的定价规则，将（输入 token / 100 万）和（输出 token / 100 万）分别乘以下方的费率以计算费用。规则按从上到下的顺序匹配--首条匹配的规则生效。",
       "patternsTitle": "模式语法",
       "patternsBody": "模式采用 SQL 风格的通配。% 可匹配任意字符。例如：claude-opus-4-7% 匹配以 claude-opus-4-7 开头的所有 model id（如 claude-opus-4-7、claude-opus-4-7-20260101）。claude-%-haiku 匹配任意 haiku 变体。像 claude-sonnet-4-6 这样的精确 id 只匹配自身。",
       "manualUpdates": "你必须手动更新价格",
-      "manualUpdatesBody": "Anthropic 在其官网公布价格变动——并没有实时数据源。当新模型发布或费率调整时，请编辑对应的规则（或在通用规则之上添加新规则），以便后续记录的会话能正确计费。已经存储的会话仍保留入库时使用的价格。",
-      "apiPricing": "仅供参考 — API 价格",
-      "apiPricingBody": "这些是按量付费的 API 价格。如果你通过订阅套餐（Pro、Max、Team 或 Enterprise）使用 Claude Code，你的实际花费是固定的月费，而非按 Token 计费——因此这里的数字通常会高于你实际支付的金额。请将此处的费用视为用量估算，仅供参考，并非账单。"
-    }
+      "manualUpdatesBody": "Anthropic 在其官网公布价格变动--并没有实时数据源。当新模型发布或费率调整时，请编辑对应的规则（或在通用规则之上添加新规则），以便后续记录的会话能正确计费。已经存储的会话仍保留入库时使用的价格。",
+      "apiPricing": "仅供参考 - API 价格",
+      "apiPricingBody": "这些是按量付费的 API 价格。如果你通过订阅套餐（Pro、Max、Team 或 Enterprise）使用 Claude Code，你的实际花费是固定的月费，而非按 Token 计费--因此这里的数字通常会高于你实际支付的金额。请将此处的费用视为用量估算，仅供参考，并非账单。"
+    },
+    "cacheWrite5m": "缓存写入 (5m)",
+    "cacheWrite1h": "缓存写入 (1h)",
+    "fastInput": "快速输入",
+    "fastOutput": "快速输出"
   },
   "claudeHome": {
     "title": "CLAUDE_HOME",
@@ -71,7 +75,7 @@
   },
   "import": {
     "title": "导入历史",
-    "description": "将已有的 Claude Code 会话导入仪表盘。Token 数、按模型计费、上下文压缩、Subagent、工具调用与各轮耗时都会从原始 JSONL transcript 重新构建——与实时会话的采集方式完全一致。",
+    "description": "将已有的 Claude Code 会话导入仪表盘。Token 数、按模型计费、上下文压缩、Subagent、工具调用与各轮耗时都会从原始 JSONL transcript 重新构建--与实时会话的采集方式完全一致。",
     "accuracyNote": "重复导入是安全的。会话按 session ID 去重，压缩基线确保 Token 总数不会重复计算。",
     "supportedFiles": "支持的输入：.jsonl, .meta.json, .zip, .tar, .tar.gz, .tgz, .gz",
     "instructions": "如何收集你的历史",
@@ -176,5 +180,188 @@
     "failedDelete": "删除失败",
     "unknownError": "未知错误",
     "actionFailed": "错误：{{message}}"
+  },
+  "webhooks": {
+    "title": "Webhook 通知",
+    "description": "将触发的告警转发到 Slack、Discord、Microsoft Teams 或任意 HTTP 端点。投递自动进行，失败会重试，且绝不阻塞监控。",
+    "count_one": "{{count}} 个目标",
+    "count_other": "{{count}} 个目标",
+    "add": "添加 Webhook",
+    "loading": "正在加载 Webhook…",
+    "empty": "尚未配置 Webhook。添加一个，将告警转发到 Slack、Discord、Teams 或自定义端点。",
+    "scopedTo_one": "{{count}} 条规则",
+    "scopedTo_other": "{{count}} 条规则",
+    "enabled": "已启用",
+    "test": "测试",
+    "edit": "编辑",
+    "delete": "删除",
+    "confirmDelete": "确认",
+    "testOk": "已投递（HTTP {{status}}）",
+    "testFail": "失败：{{error}}",
+    "addTitle": "新建 Webhook",
+    "editTitle": "编辑 Webhook",
+    "fieldName": "名称",
+    "fieldNamePlaceholder": "例如：团队 Slack #alerts",
+    "fieldType": "类型",
+    "type": {
+      "slack": "Slack",
+      "discord": "Discord",
+      "teams": "Microsoft Teams",
+      "generic": "通用（自定义 JSON）"
+    },
+    "fieldUrl": "Webhook 地址",
+    "urlKeepHint": "留空则保持不变",
+    "urlKeepPlaceholder": "••••••••（保持不变）",
+    "urlPlaceholder": {
+      "slack": "https://hooks.slack.com/services/…",
+      "discord": "https://discord.com/api/webhooks/…",
+      "teams": "https://outlook.office.com/webhook/…",
+      "generic": "https://example.com/webhook"
+    },
+    "fieldSecret": "签名密钥（可选）",
+    "secretPlaceholder": "HMAC-SHA256 密钥",
+    "secretKeepPlaceholder": "••••••••（留空则保持不变）",
+    "secretHint": "设置后，请求会附带 X-Webhook-Signature 头进行签名。",
+    "fieldHeaders": "自定义请求头（可选）",
+    "replaceHeaders": "替换请求头",
+    "headerKey": "请求头",
+    "headerValue": "值",
+    "addHeader": "添加请求头",
+    "scopeAll": "接收所有规则的告警",
+    "enabledOnSave": "启用",
+    "save": "保存",
+    "create": "创建",
+    "cancel": "取消",
+    "urlOptional": "可选覆盖",
+    "urlAuto": "URL 将根据下方凭据自动设置。",
+    "deleteTitle": "删除 Webhook？",
+    "deleteMessage": "删除“{{name}}”？触发的告警将不再投递到此目标。此操作无法撤销。",
+    "guideToggle": "如何设置 {{provider}}",
+    "guideDocs": "{{provider}} 官方文档",
+    "guideStaleNote": "各服务的设置界面经常变动，这些步骤可能已过时--请务必以官方文档为准。"
+  },
+  "alertsHub": {
+    "title": "告警",
+    "description": "在一个地方定义告警规则、将其路由到 Webhook 渠道，并查看已触发的告警。",
+    "tabRules": "规则",
+    "tabChannels": "渠道",
+    "tabActivity": "动态",
+    "rulesHint": "触发告警的条件。在服务端针对实时事件流进行评估。",
+    "rulesEmptyHint": "添加规则，开始对错误、闲置、卡住的代理或令牌阈值进行告警。"
+  },
+  "jumpTo": "跳转到",
+  "webhookGuides": {
+    "slack": {
+      "steps": [
+        "在 api.slack.com/apps 创建或打开一个 Slack 应用。",
+        "开启“Incoming Webhooks”，然后点击“Add New Webhook to Workspace”。",
+        "选择要发布到的频道并授权。",
+        "复制生成的 URL（https://hooks.slack.com/services/…）并粘贴到上方。"
+      ]
+    },
+    "discord": {
+      "steps": [
+        "打开服务器 → 服务器设置 → 整合 → Webhook。",
+        "点击“新建 Webhook”，选择频道，可重命名。",
+        "点击“复制 Webhook URL”并粘贴到上方。"
+      ]
+    },
+    "teams": {
+      "steps": [
+        "在目标 Teams 频道，点击 ⋯ → “Workflows”。",
+        "选择模板“Post to a channel when a webhook request is received”。",
+        "完成流程并复制生成的 HTTP POST URL。",
+        "粘贴到上方。（传统 Office 365 连接器已于 2025 年停用 - 请使用 Workflows。）"
+      ]
+    },
+    "google_chat": {
+      "steps": [
+        "打开 Google Chat 空间 → 空间标题 → “应用和集成”。",
+        "点击“Webhook”→“添加 Webhook”并命名。",
+        "复制 Webhook URL 并粘贴到上方。"
+      ]
+    },
+    "mattermost": {
+      "steps": [
+        "主菜单 → 集成 → 传入 Webhook（管理员需先启用 Webhook）。",
+        "点击“添加传入 Webhook”并选择频道。",
+        "保存后复制 Webhook URL 并粘贴到上方。"
+      ]
+    },
+    "rocketchat": {
+      "steps": [
+        "管理 → 集成 → 新建 → 传入。",
+        "启用它，选择频道并保存。",
+        "复制“Webhook URL”并粘贴到上方。"
+      ]
+    },
+    "telegram": {
+      "steps": [
+        "给 @BotFather 发消息，运行 /newbot，复制 bot token。",
+        "将该 bot 加入你的群/频道（或直接私聊它）。",
+        "获取 chat ID：发送一条消息，打开 https://api.telegram.org/bot<token>/getUpdates，读取 result[].message.chat.id。",
+        "在上方填入 Bot token 和 Chat ID - 无需 URL。"
+      ]
+    },
+    "pagerduty": {
+      "steps": [
+        "打开目标服务 → 集成 → “Add integration”。",
+        "选择“Events API v2”。",
+        "复制 Integration Key（即 routing key）。",
+        "在上方填入 Routing key - Events API URL 已自动填好。"
+      ]
+    },
+    "opsgenie": {
+      "steps": [
+        "设置 → 集成 → 添加“API”集成。",
+        "复制生成的 API key。",
+        "记下你的账户区域（US 或 EU）。",
+        "在上方填入 API key 和区域 - 告警 URL 会根据区域自动推导。"
+      ]
+    },
+    "splunk_oncall": {
+      "steps": [
+        "集成 → REST Endpoint，并启用它。",
+        "复制 REST URL - 其中已包含你的 API key。",
+        "将末尾的“$routing_key”替换为你的某个 routing key。",
+        "将完整 URL 粘贴到上方。"
+      ]
+    },
+    "zapier": {
+      "steps": [
+        "创建一个 Zap，触发器选择“Webhooks by Zapier”→“Catch Hook”。",
+        "复制它提供的自定义 Webhook URL。",
+        "粘贴到上方。告警以 JSON 形式到达：{ event, alert }。"
+      ]
+    },
+    "make": {
+      "steps": [
+        "在场景的第一步添加“Webhooks”→“Custom webhook”模块。",
+        "点击“Add”，创建该 hook 并复制其 URL。",
+        "粘贴到上方，然后运行一次让 Make 学习负载结构。"
+      ]
+    },
+    "n8n": {
+      "steps": [
+        "在工作流中添加“Webhook”节点；将方法设为 POST。",
+        "复制 Production URL。",
+        "激活工作流并将 URL 粘贴到上方（自托管允许 http）。"
+      ]
+    },
+    "pipedream": {
+      "steps": [
+        "创建一个带“HTTP / Webhook”触发器的工作流。",
+        "复制唯一的端点 URL。",
+        "粘贴到上方；在 Pipedream 事件检查器中查看投递。"
+      ]
+    },
+    "generic": {
+      "steps": [
+        "指向任何接受 JSON POST 的端点（https，本地测试可用 http）。",
+        "负载结构：{ event: 'alert.triggered', source, sent_at, alert: { … } }。",
+        "可选：设置签名密钥（对负载做 HMAC-SHA256 → X-Webhook-Signature 头）和自定义请求头。",
+        "提示：用 webhook.site 等免费工具查看确切负载。"
+      ]
+    }
   }
 }
