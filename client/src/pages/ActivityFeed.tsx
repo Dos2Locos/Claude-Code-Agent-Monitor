@@ -1,10 +1,10 @@
 /**
  * @file ActivityFeed.tsx
- * @description Real-time feed of agent events with server-driven filters,
- * tool-call grouping, and batched "Load more" pagination. Clicking a row in
- * flat mode toggles the inline EventDetail payload view; the "View session"
- * Link navigates to the session page. Live events trigger a debounced,
- * filter-aware refetch that preserves the user's accumulated page size.
+ * @description Real-time feed of agent events with server-driven filters and
+ * batched pagination. Clicking a row toggles the inline EventDetail payload
+ * view; the "View session" Link navigates to the session page. Live events
+ * trigger a debounced, filter-aware refetch that preserves the user's
+ * accumulated page size.
  * @author Son Nguyen <hoangson091104@gmail.com>
  */
 
@@ -25,13 +25,12 @@ import {
 } from "../components/EventFilters";
 import type { EventFiltersValue } from "../components/EventFilters";
 import { EventFiltersInfo } from "../components/EventFiltersInfo";
-import { EventGroupRow } from "../components/EventGroupRow";
 import { Skeleton } from "../components/Skeleton";
 import {
   agentOriginLabel,
   buildEventTitle,
   buildOriginLabel,
-  groupEvents,
+  projectFromCwd,
   projectFromEvent,
   statusFromEventType,
 } from "../lib/event-grouping";
@@ -56,11 +55,16 @@ export function ActivityFeed() {
   const [paused, setPaused] = useState(false);
   const [loading, setLoading] = useState(true);
   const [bufferCount, setBufferCount] = useState(0);
-  const [grouped, setGrouped] = useState(true);
   const [expandedEvents, setExpandedEvents] = useState<Set<number>>(() => new Set());
   // session_id → session name. Populated from /api/sessions on mount so rows
   // can render a friendly session pill instead of a bare UUID.
   const [sessionNameById, setSessionNameById] = useState<Map<string, string>>(() => new Map());
+  // session_id → project (basename of the session's cwd). Used as the leading
+  // origin segment for events whose own payload carries no cwd (e.g.
+  // TurnDuration "Turn completed" rows), so they match tool-use rows.
+  const [sessionProjectById, setSessionProjectById] = useState<Map<string, string>>(
+    () => new Map()
+  );
   // agent_id → subagent-facing info. Populated from /api/agents on mount so the
   // subagent pill can show subagent_type (e.g. "frontend-reviewer") instead of
   // a raw ID. Main agents intentionally yield no pill.
@@ -145,14 +149,18 @@ export function ActivityFeed() {
       .then(({ sessions }) => {
         if (cancelled) return;
         const map = new Map<string, string>();
+        const projectMap = new Map<string, string>();
         for (const s of sessions) {
           // Always populate so the EventDetail panel's "Session" row shows
           // an identifiable label even for unnamed sessions. Matches the
           // fallback used by SessionDetail's header.
           const label = s.name?.trim() || `Session ${s.id.slice(0, 8)}`;
           map.set(s.id, label);
+          const project = projectFromCwd(s.cwd);
+          if (project) projectMap.set(s.id, project);
         }
         setSessionNameById(map);
+        setSessionProjectById(projectMap);
       })
       .catch(() => {
         // Non-fatal: rows just render without the session name pill.
@@ -235,7 +243,6 @@ export function ActivityFeed() {
   }
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const groups = useMemo(() => groupEvents(events), [events]);
   // Precompute the project name per event so row rendering doesn't re-parse
   // event.data JSON on every render pass.
   const projectByEventId = useMemo(() => {
@@ -309,39 +316,6 @@ export function ActivityFeed() {
         />
       </div>
 
-      <div className="flex items-center gap-2 mb-3 px-1">
-        <div
-          role="group"
-          aria-label="view mode"
-          className="inline-flex rounded-md border border-border overflow-hidden"
-        >
-          <button
-            type="button"
-            onClick={() => setGrouped(true)}
-            aria-pressed={grouped}
-            className={`text-[11px] px-3 py-1 cursor-pointer ${
-              grouped
-                ? "bg-accent/20 text-accent"
-                : "bg-surface-2 text-gray-400 hover:text-gray-200"
-            }`}
-          >
-            {t("common:eventFilters.grouped")}
-          </button>
-          <button
-            type="button"
-            onClick={() => setGrouped(false)}
-            aria-pressed={!grouped}
-            className={`text-[11px] px-3 py-1 border-l border-border cursor-pointer ${
-              !grouped
-                ? "bg-accent/20 text-accent"
-                : "bg-surface-2 text-gray-400 hover:text-gray-200"
-            }`}
-          >
-            {t("common:eventFilters.flat")}
-          </button>
-        </div>
-      </div>
-
       {!loading && events.length === 0 ? (
         <EmptyState
           icon={Activity}
@@ -367,98 +341,92 @@ export function ActivityFeed() {
                     </div>
                   ))
                 : null}
-              {grouped
-                ? groups.map((group) => (
-                    <EventGroupRow
-                      key={group.key}
-                      group={group}
-                      sessionNameById={sessionNameById}
-                      agentInfoById={agentInfoById}
-                    />
-                  ))
-                : events.map((event, i) => {
-                    const isOpen = event.id != null && expandedEvents.has(event.id);
-                    return (
-                      <div key={event.id ?? i} className="animate-slide-up">
-                        <div
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => {
-                            if (event.id != null) toggleEvent(event.id);
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
-                              if (event.id != null) toggleEvent(event.id);
-                            }
-                          }}
-                          aria-expanded={isOpen}
-                          className="flex items-center px-5 py-3.5 gap-4 hover:bg-surface-4 transition-colors cursor-pointer select-none"
-                        >
-                          <ChevronRight
-                            className={`w-3.5 h-3.5 text-gray-500 transition-transform flex-shrink-0 -mr-1.5 ${isOpen ? "rotate-90" : ""}`}
-                          />
+              {events.map((event, i) => {
+                const isOpen = event.id != null && expandedEvents.has(event.id);
+                return (
+                  <div key={event.id ?? i} className="animate-slide-up">
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => {
+                        if (event.id != null) toggleEvent(event.id);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          if (event.id != null) toggleEvent(event.id);
+                        }
+                      }}
+                      aria-expanded={isOpen}
+                      className="flex items-center px-5 py-3.5 gap-4 hover:bg-surface-4 transition-colors cursor-pointer select-none"
+                    >
+                      <ChevronRight
+                        className={`w-3.5 h-3.5 text-gray-500 transition-transform flex-shrink-0 -mr-1.5 ${isOpen ? "rotate-90" : ""}`}
+                      />
 
-                          <div className="w-16 flex-shrink-0 text-right font-mono leading-tight">
-                            <div className="text-[11px] text-gray-500">
-                              {formatTime(event.created_at)}
-                            </div>
-                            <div className="text-[9px] text-gray-600">
-                              {formatDateShort(event.created_at)}
-                            </div>
-                          </div>
-
-                          <AgentStatusBadge status={statusFromEventType(event.event_type)} />
-
-                          {(() => {
-                            const sname = sessionNameById.get(event.session_id);
-                            const project = projectByEventId.get(event.id) ?? null;
-                            const origin = buildOriginLabel(
-                              project,
-                              sname ?? null,
-                              agentOriginLabel(event.agent_id, agentInfoById)
-                            );
-                            return (
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm text-gray-300 truncate">
-                                  {origin && (
-                                    <span
-                                      className="text-gray-500 mr-1"
-                                      title={`${event.session_id} · ${event.agent_id ?? ""}`}
-                                    >
-                                      {origin} ·
-                                    </span>
-                                  )}
-                                  {buildEventTitle(event)}
-                                </p>
-                              </div>
-                            );
-                          })()}
-
-                          {event.tool_name && (
-                            <span className="text-[11px] px-2 py-0.5 bg-surface-2 rounded text-gray-500 font-mono flex-shrink-0">
-                              {event.tool_name}
-                            </span>
-                          )}
-
-                          <span className="text-[11px] text-gray-600 flex-shrink-0 w-16 text-right">
-                            {timeAgo(event.created_at)}
-                          </span>
-
-                          <Link
-                            to={`/sessions/${event.session_id}`}
-                            onClick={(e) => e.stopPropagation()}
-                            title={t("viewSession")}
-                            className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md bg-surface-2 text-gray-400 hover:text-accent hover:bg-accent/10 border border-border hover:border-accent/30 transition-colors flex-shrink-0 font-medium"
-                          >
-                            {t("viewSession")}
-                            <ExternalLink className="w-3 h-3" />
-                          </Link>
+                      <div className="w-16 flex-shrink-0 text-right font-mono leading-tight">
+                        <div className="text-[11px] text-gray-500">
+                          {formatTime(event.created_at)}
                         </div>
-                        {isOpen && <EventDetail event={event} />}
+                        <div className="text-[9px] text-gray-600">
+                          {formatDateShort(event.created_at)}
+                        </div>
                       </div>
-                    );
-                  })}
+
+                      <AgentStatusBadge status={statusFromEventType(event.event_type)} />
+
+                      {(() => {
+                        const sname = sessionNameById.get(event.session_id);
+                        const project =
+                          projectByEventId.get(event.id) ??
+                          sessionProjectById.get(event.session_id) ??
+                          null;
+                        const origin = buildOriginLabel(
+                          project,
+                          sname ?? null,
+                          agentOriginLabel(event.agent_id, agentInfoById)
+                        );
+                        return (
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-gray-300 truncate">
+                              {origin && (
+                                <span
+                                  className="text-gray-500 mr-1"
+                                  title={`${event.session_id} · ${event.agent_id ?? ""}`}
+                                >
+                                  {origin} ·
+                                </span>
+                              )}
+                              {buildEventTitle(event)}
+                            </p>
+                          </div>
+                        );
+                      })()}
+
+                      {event.tool_name && (
+                        <span className="text-[11px] px-2 py-0.5 bg-surface-2 rounded text-gray-500 font-mono flex-shrink-0">
+                          {event.tool_name}
+                        </span>
+                      )}
+
+                      <span className="text-[11px] text-gray-600 flex-shrink-0 w-16 text-right">
+                        {timeAgo(event.created_at)}
+                      </span>
+
+                      <Link
+                        to={`/sessions/${event.session_id}`}
+                        onClick={(e) => e.stopPropagation()}
+                        title={t("viewSession")}
+                        className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-md bg-surface-2 text-gray-400 hover:text-accent hover:bg-accent/10 border border-border hover:border-accent/30 transition-colors flex-shrink-0 font-medium"
+                      >
+                        {t("viewSession")}
+                        <ExternalLink className="w-3 h-3" />
+                      </Link>
+                    </div>
+                    {isOpen && <EventDetail event={event} />}
+                  </div>
+                );
+              })}
             </div>
           </div>
           {total > 0 && (

@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { agentOriginLabel, type AgentInfo } from "../event-grouping";
+import { agentOriginLabel, projectFromCwd, type AgentInfo } from "../event-grouping";
 
 function makeMap(entries: Array<[string, AgentInfo]>): Map<string, AgentInfo> {
   return new Map(entries);
@@ -122,5 +122,27 @@ describe("agentOriginLabel - parent chain walk", () => {
 
   it("falls back to 'main' for IDs ending in -main when no info is available", () => {
     expect(agentOriginLabel("session-xyz-main", makeMap([]))).toBe("main");
+  });
+});
+
+describe("projectFromCwd - session-cwd fallback for the dir prefix", () => {
+  it("returns the last path segment of a POSIX cwd", () => {
+    expect(projectFromCwd("/Users/dev/WebstormProjects/Claude-Code-Agent-Monitor")).toBe(
+      "Claude-Code-Agent-Monitor"
+    );
+  });
+
+  it("ignores a trailing slash", () => {
+    expect(projectFromCwd("/Users/dev/my-app/")).toBe("my-app");
+  });
+
+  it("handles Windows backslash paths", () => {
+    expect(projectFromCwd("C:\\Users\\dev\\my-app")).toBe("my-app");
+  });
+
+  it("returns null for null, undefined, or empty cwd", () => {
+    expect(projectFromCwd(null)).toBeNull();
+    expect(projectFromCwd(undefined)).toBeNull();
+    expect(projectFromCwd("")).toBeNull();
   });
 });
