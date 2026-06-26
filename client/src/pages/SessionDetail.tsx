@@ -40,13 +40,12 @@ import {
 } from "../components/EventFilters";
 import type { EventFiltersValue } from "../components/EventFilters";
 import { EventFiltersInfo } from "../components/EventFiltersInfo";
-import { EventGroupRow } from "../components/EventGroupRow";
 import { Skeleton } from "../components/Skeleton";
 import {
   agentOriginLabel,
   buildEventTitle,
   buildOriginLabel,
-  groupEvents,
+  projectFromCwd,
   projectFromEvent,
   statusFromEventType,
 } from "../lib/event-grouping";
@@ -88,7 +87,6 @@ export function SessionDetail() {
   const [eventsTotal, setEventsTotal] = useState(0);
   const [eventsLoadingMore, setEventsLoadingMore] = useState(false);
   const [filters, setFilters] = useState<EventFiltersValue>(EMPTY_FILTERS);
-  const [grouped, setGrouped] = useState(true);
   const [cost, setCost] = useState<CostResult | null>(null);
   const [loading, setLoading] = useState(true);
   // True when this session is currently being driven by an in-flight Run
@@ -318,8 +316,6 @@ export function SessionDetail() {
   }, [id, filters]);
 
   eventApiParamsRef.current = eventApiParams;
-
-  const eventGroups = useMemo(() => groupEvents(events), [events]);
 
   // Build an AgentInfo map from the already-fetched agents list so rows can
   // render the subagent pill (subagent_type) without an extra fetch.
@@ -901,38 +897,6 @@ export function SessionDetail() {
               agentOptions={agents.map((a) => ({ id: a.id, label: a.name || a.id }))}
             />
           </div>
-          <div className="flex items-center gap-2 mb-3 px-1">
-            <div
-              role="group"
-              aria-label="view mode"
-              className="inline-flex rounded-md border border-border overflow-hidden"
-            >
-              <button
-                type="button"
-                onClick={() => setGrouped(true)}
-                aria-pressed={grouped}
-                className={`text-[11px] px-3 py-1 cursor-pointer ${
-                  grouped
-                    ? "bg-accent/20 text-accent"
-                    : "bg-surface-2 text-gray-400 hover:text-gray-200"
-                }`}
-              >
-                {t("common:eventFilters.grouped")}
-              </button>
-              <button
-                type="button"
-                onClick={() => setGrouped(false)}
-                aria-pressed={!grouped}
-                className={`text-[11px] px-3 py-1 border-l border-border cursor-pointer ${
-                  !grouped
-                    ? "bg-accent/20 text-accent"
-                    : "bg-surface-2 text-gray-400 hover:text-gray-200"
-                }`}
-              >
-                {t("common:eventFilters.flat")}
-              </button>
-            </div>
-          </div>
           {events.length === 0 ? (
             <p className="text-sm text-gray-500">
               {isEmptyFilters(filters) ? t("detail.noEvents") : t("common:eventFilters.noResults")}
@@ -940,81 +904,73 @@ export function SessionDetail() {
           ) : (
             <div className="card overflow-hidden">
               <div className="divide-y divide-border max-h-[600px] overflow-y-auto overflow-x-auto">
-                {grouped
-                  ? eventGroups.map((group) => (
-                      <EventGroupRow
-                        key={group.key}
-                        group={group}
-                        agentInfoById={agentInfoById}
-                        sessionNameById={sessionNameById}
-                      />
-                    ))
-                  : events.map((event, i) => {
-                      const key = event.id ?? i;
-                      const isOpen = event.id != null && expandedEvents.has(event.id);
-                      return (
-                        <div key={key}>
-                          <button
-                            type="button"
-                            onClick={() => event.id != null && toggleEvent(event.id)}
-                            aria-expanded={isOpen}
-                            aria-label={
-                              isOpen
-                                ? t("common:eventDetail.collapse")
-                                : t("common:eventDetail.expand")
-                            }
-                            className="w-full text-left px-5 py-3 flex items-center gap-4 hover:bg-surface-4 transition-colors min-w-0 cursor-pointer"
-                          >
-                            <span
-                              className={`text-gray-500 text-[10px] w-3 flex-shrink-0 transition-transform ${isOpen ? "rotate-90" : ""}`}
-                              aria-hidden="true"
-                            >
-                              ▶
-                            </span>
-                            <div className="w-16 text-[11px] text-gray-600 font-mono flex-shrink-0">
-                              {timeAgo(event.created_at)}
-                            </div>
-                            <AgentStatusBadge status={statusFromEventType(event.event_type)} />
-                            {(() => {
-                              // Session is implicit on this page - project is
-                              // still shown so the row identifies the working
-                              // directory when you share / search.
-                              const project = projectByEventId.get(event.id) ?? null;
-                              const origin = buildOriginLabel(
-                                project,
-                                null,
-                                agentOriginLabel(event.agent_id, agentInfoById)
-                              );
-                              return (
-                                <span className="text-sm text-gray-300 flex-1 truncate">
-                                  {origin && (
-                                    <span
-                                      className="text-gray-500 mr-1"
-                                      title={event.agent_id ?? undefined}
-                                    >
-                                      {origin} ·
-                                    </span>
-                                  )}
-                                  {buildEventTitle(event)}
-                                </span>
-                              );
-                            })()}
-                            {event.tool_name && (
-                              <span className="text-[11px] px-2 py-0.5 bg-surface-2 rounded text-gray-500 font-mono">
-                                {event.tool_name}
-                              </span>
-                            )}
-                          </button>
-                          {isOpen && (
-                            <EventDetail
-                              event={event}
-                              agentInfoById={agentInfoById}
-                              sessionNameById={sessionNameById}
-                            />
-                          )}
+                {events.map((event, i) => {
+                  const key = event.id ?? i;
+                  const isOpen = event.id != null && expandedEvents.has(event.id);
+                  return (
+                    <div key={key}>
+                      <button
+                        type="button"
+                        onClick={() => event.id != null && toggleEvent(event.id)}
+                        aria-expanded={isOpen}
+                        aria-label={
+                          isOpen ? t("common:eventDetail.collapse") : t("common:eventDetail.expand")
+                        }
+                        className="w-full text-left px-5 py-3 flex items-center gap-4 hover:bg-surface-4 transition-colors min-w-0 cursor-pointer"
+                      >
+                        <span
+                          className={`text-gray-500 text-[10px] w-3 flex-shrink-0 transition-transform ${isOpen ? "rotate-90" : ""}`}
+                          aria-hidden="true"
+                        >
+                          ▶
+                        </span>
+                        <div className="w-16 text-[11px] text-gray-600 font-mono flex-shrink-0">
+                          {timeAgo(event.created_at)}
                         </div>
-                      );
-                    })}
+                        <AgentStatusBadge status={statusFromEventType(event.event_type)} />
+                        {(() => {
+                          // Session is implicit on this page - project is
+                          // still shown so the row identifies the working
+                          // directory when you share / search. Events without
+                          // their own cwd (e.g. TurnDuration) fall back to the
+                          // session's cwd so every row carries the dir prefix.
+                          const project =
+                            projectByEventId.get(event.id) ?? projectFromCwd(session?.cwd) ?? null;
+                          const origin = buildOriginLabel(
+                            project,
+                            null,
+                            agentOriginLabel(event.agent_id, agentInfoById)
+                          );
+                          return (
+                            <span className="text-sm text-gray-300 flex-1 truncate">
+                              {origin && (
+                                <span
+                                  className="text-gray-500 mr-1"
+                                  title={event.agent_id ?? undefined}
+                                >
+                                  {origin} ·
+                                </span>
+                              )}
+                              {buildEventTitle(event)}
+                            </span>
+                          );
+                        })()}
+                        {event.tool_name && (
+                          <span className="text-[11px] px-2 py-0.5 bg-surface-2 rounded text-gray-500 font-mono">
+                            {event.tool_name}
+                          </span>
+                        )}
+                      </button>
+                      {isOpen && (
+                        <EventDetail
+                          event={event}
+                          agentInfoById={agentInfoById}
+                          sessionNameById={sessionNameById}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

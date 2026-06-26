@@ -1,100 +1,18 @@
 /**
  * @file event-grouping.ts
- * @description Client-side grouping of DashboardEvent rows by `tool_use_id`.
- * A single tool invocation typically emits two events - `PreToolUse` (Working)
- * and `PostToolUse` (Connected) - both carrying the same `tool_use_id` inside
- * their hook payload. Grouping collapses each such pair into one `EventGroup`
- * so the UI can show "Bash: curl ... (2.3s)" as one row instead of two, while
- * keeping the individual events accessible when the group is expanded.
- *
- * Events without a `tool_use_id` (Stop, Notification, TurnDuration, etc.)
- * become single-event groups and render identically to a flat row.
+ * @description Client-side helpers for rendering a flat stream of
+ * `DashboardEvent` rows: a per-event status tag (`statusFromEventType`), a
+ * smart human-readable title (`buildEventTitle`), and agent/origin labels for
+ * the muted "{project} › {session} › {agent}" prefix. (The historical
+ * tool-call grouping view was removed; the timeline now renders flat only.)
  *
  * @author Son Nguyen <hoangson091104@gmail.com>
  */
 
 import type { DashboardEvent } from "./types";
 
-export type EventGroup = {
-  /** Stable key - either the tool_use_id, or `single:<event.id>` for
-   *  ungroupable events. Safe to use as a React list key. */
-  key: string;
-  /** Events in the group, sorted chronologically (oldest → newest). */
-  events: DashboardEvent[];
-  /** Tool name shared by all events in the group (null for non-tool events). */
-  tool_name: string | null;
-  /** The underlying tool_use_id, or null for single-event groups. */
-  tool_use_id: string | null;
-  /** Timestamp of the earliest event in the group. */
-  firstAt: string;
-  /** Timestamp of the latest event in the group. */
-  lastAt: string;
-  /** Wall-clock duration between first and last event, or null if only one. */
-  durationMs: number | null;
-  /** Best summary to display - prefers the most recent non-empty summary. */
-  summary: string | null;
-};
-
-function extractToolUseId(event: DashboardEvent): string | null {
-  if (!event.data) return null;
-  try {
-    const parsed = JSON.parse(event.data);
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      const v = (parsed as Record<string, unknown>).tool_use_id;
-      if (typeof v === "string" && v.length > 0) return v;
-    }
-  } catch {
-    // Malformed payload - fall through to null.
-  }
-  return null;
-}
-
-export function groupEvents(events: DashboardEvent[]): EventGroup[] {
-  const byKey = new Map<string, DashboardEvent[]>();
-  const order: string[] = [];
-
-  for (const event of events) {
-    const toolUseId = extractToolUseId(event);
-    const key = toolUseId ?? `single:${event.id}`;
-    if (!byKey.has(key)) {
-      byKey.set(key, []);
-      order.push(key);
-    }
-    byKey.get(key)!.push(event);
-  }
-
-  const groups: EventGroup[] = [];
-  for (const key of order) {
-    const items = byKey.get(key)!;
-    const sorted = [...items].sort((a, b) => a.created_at.localeCompare(b.created_at));
-    const first = sorted[0]!;
-    const last = sorted[sorted.length - 1]!;
-    const durationMs =
-      sorted.length > 1
-        ? Math.max(0, new Date(last.created_at).getTime() - new Date(first.created_at).getTime())
-        : null;
-    const summary =
-      [...sorted].reverse().find((e) => e.summary && e.summary.length > 0)?.summary ?? null;
-
-    groups.push({
-      key,
-      events: sorted,
-      tool_name: first.tool_name,
-      tool_use_id: key.startsWith("single:") ? null : key,
-      firstAt: first.created_at,
-      lastAt: last.created_at,
-      durationMs,
-      summary,
-    });
-  }
-
-  // Groups are returned newest-first (same order as flat events list).
-  groups.sort((a, b) => b.firstAt.localeCompare(a.firstAt));
-  return groups;
-}
-
-/** Best-effort status tag per event_type - mirrors the mapping used by
- *  ActivityFeed / SessionDetail so grouped rows can show a status progression. */
+/** Best-effort status tag per event_type - drives the status badge shown on
+ *  each row in the ActivityFeed / SessionDetail event streams. */
 export function statusFromEventType(type: string): "working" | "waiting" | "completed" | "error" {
   switch (type) {
     case "PreToolUse":
@@ -111,15 +29,6 @@ export function statusFromEventType(type: string): "working" | "waiting" | "comp
     default:
       return "waiting";
   }
-}
-
-export function formatGroupDuration(ms: number | null): string | null {
-  if (ms == null) return null;
-  if (ms < 1000) return `${ms}ms`;
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
-  const mins = Math.floor(ms / 60_000);
-  const secs = Math.floor((ms % 60_000) / 1000);
-  return `${mins}m ${secs}s`;
 }
 
 // ───────── Dynamic humanizers (no per-tool static tables) ─────────
@@ -280,7 +189,7 @@ function extractToolInput(event: DashboardEvent): Record<string, unknown> | null
 
 /** Returns a short, descriptive title for an event. Parses `tool_input` and
  *  dispatches per-tool to surface what actually happened (e.g. "Bash · git
- *  commit", "GitLab · get merge request · !174", "Edit EventGroupRow.tsx"),
+ *  commit", "GitLab · get merge request · !174", "Edit SessionDetail.tsx"),
  *  instead of the generic "Using tool: X" summary. MCP tools are rendered
  *  dynamically from their namespaced name - no per-server static mapping. */
 export function buildEventTitle(event: DashboardEvent): string {
@@ -412,14 +321,6 @@ export function buildEventTitle(event: DashboardEvent): string {
   return `${event.tool_name}${event.summary ? ` · ${event.summary}` : ""}`;
 }
 
-export function buildGroupTitle(group: EventGroup): string {
-  // Prefer the earliest event (usually PreToolUse) because it carries the
-  // intended tool_input; the post event may or may not echo the same shape.
-  const primary = group.events[0];
-  if (primary) return buildEventTitle(primary);
-  return group.summary || "(unknown)";
-}
-
 /** Returns a short agent label for display next to an event, or null when the
  *  event belongs to the session's main agent (no disambiguation needed). */
 export function shortAgentLabel(agentId: string | null): string | null {
@@ -533,16 +434,26 @@ export function buildOriginLabel(
   return parts.length > 0 ? parts.join(" › ") : null;
 }
 
+/** Last path segment of a working directory - the project/dir name shown as the
+ *  leading origin segment. Null for an empty or missing cwd. Use this to derive
+ *  a fallback project for events whose own payload carries no `cwd` (e.g.
+ *  TurnDuration), by passing the owning session's cwd. */
+export function projectFromCwd(cwd: string | null | undefined): string | null {
+  if (typeof cwd !== "string" || cwd.length === 0) return null;
+  return basename(cwd);
+}
+
 /** Reads `cwd` out of an event's payload and returns the last path segment
  *  (the project/directory name). Null when the payload doesn't include cwd
- *  (e.g. TurnDuration events, or events from a very old client). */
+ *  (e.g. TurnDuration events, or events from a very old client) - callers can
+ *  fall back to `projectFromCwd(session.cwd)` in that case. */
 export function projectFromEvent(event: DashboardEvent): string | null {
   if (!event.data) return null;
   try {
     const parsed = JSON.parse(event.data);
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
       const cwd = (parsed as Record<string, unknown>).cwd;
-      if (typeof cwd === "string" && cwd.length > 0) return basename(cwd);
+      if (typeof cwd === "string" && cwd.length > 0) return projectFromCwd(cwd);
     }
   } catch {
     /* ignore */

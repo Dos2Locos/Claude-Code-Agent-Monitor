@@ -21,8 +21,8 @@ type EventDetailProps = {
   event: DashboardEvent;
   /** Optional lookup so the panel can surface a human-friendly agent name
    *  (e.g. "technical-researcher · Subagent 14") next to the raw agent_id.
-   *  Callers that already have the session's agent map (EventGroupRow,
-   *  SessionDetail) should pass it; older callers can omit it and the panel
+   *  Callers that already have the session's agent map (SessionDetail,
+   *  ActivityFeed) should pass it; older callers can omit it and the panel
    *  falls back to id-only display. */
   agentInfoById?: Map<string, AgentInfo>;
   /** Optional lookup so the panel can surface a human-friendly session
